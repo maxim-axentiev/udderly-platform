@@ -17,6 +17,10 @@ export class EnvService {
     return this.env.API_PORT;
   }
 
+  get apiListenHost(): string {
+    return this.env.API_LISTEN_HOST;
+  }
+
   get databaseUrl(): string {
     return this.env.DATABASE_URL;
   }

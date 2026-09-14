@@ -11,7 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "audit:wherewolf": "tsx src/integrations/wherewolf/audit-wherewolf.cli.ts",
-    "test:fareharbor-webhook": "tsx --test src/integrations/fareharbor/fareharbor-webhook.service.spec.ts && tsx src/integrations/fareharbor/test-fareharbor-webhook.cli.ts",
+    "test:fareharbor-webhook": "tsx --test src/common/redact-webhook-path.middleware.spec.ts src/integrations/fareharbor/fareharbor-webhook.service.spec.ts && tsx src/integrations/fareharbor/test-fareharbor-webhook.cli.ts",
     "integrations:recover": "tsx src/integrations/recover-integration-events.cli.ts"
   },
   "dependencies": {
@@ -27,15 +27,15 @@
     "postgres": "^3.4.7",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "zod": "^3.25.76"
+    "zod": "^3.25.76",
+    "drizzle-kit": "^0.31.4",
+    "tsx": "^4.20.5"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",
     "@nestjs/schematics": "^11.0.7",
     "@types/express": "^5.0.3",
     "@types/node": "^22.18.1",
-    "drizzle-kit": "^0.31.4",
-    "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }
 }

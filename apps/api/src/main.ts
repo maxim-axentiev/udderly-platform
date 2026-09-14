@@ -24,10 +24,10 @@ async function bootstrap(): Promise<void> {
 
   app.enableShutdownHooks();
 
-  await app.listen(env.apiPort, "127.0.0.1");
+  await app.listen(env.apiPort, env.apiListenHost);
 
   const logger = new Logger("Bootstrap");
-  logger.log(`API listening on http://127.0.0.1:${env.apiPort}`);
+  logger.log(`API listening on http://${env.apiListenHost}:${env.apiPort}`);
 }
 
 void bootstrap();

@@ -1,4 +1,6 @@
+import type { MiddlewareConsumer, NestModule } from "@nestjs/common";
 import { Module } from "@nestjs/common";
+import { RedactWebhookPathMiddleware } from "./common/redact-webhook-path.middleware";
 import { EnvModule } from "./config/env.module";
 import { DatabaseModule } from "./database/database.module";
 import { HealthModule } from "./health/health.module";
@@ -18,4 +20,8 @@ import { RedisModule } from "./redis/redis.module";
     FareharborModule,
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RedactWebhookPathMiddleware).forRoutes("*");
+  }
+}

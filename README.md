@@ -150,3 +150,7 @@ npm run audit:wherewolf
 npm run test:fareharbor-webhook
 npm run integrations:recover
 ```
+
+## Production
+
+Production Docker, Traefik routing, and server deploy steps are documented in `docs/deployment.md`. The first production phase publishes the API only (no frontend) at `goatbarn.udderlyridiculousfarmlife.com`.

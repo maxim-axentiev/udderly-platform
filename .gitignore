@@ -13,6 +13,9 @@ Thumbs.db
 .env
 .env.local
 .env.*.local
+.env.production
+!.env.example
+!.env.production.example
 *.tsbuildinfo
 .idea/
 .vscode/

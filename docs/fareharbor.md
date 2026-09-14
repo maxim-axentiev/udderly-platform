@@ -48,6 +48,8 @@ Set `FAREHARBOR_WEBHOOK_SECRET` in the root `.env` file. It is optional: the API
 
 Never log this value. Never expose it from status endpoints.
 
+Application logs redact `/webhooks/fareharbor/<secret>` to `/webhooks/fareharbor/[redacted]`. Traefik access logs on the Droplet are separate and may still contain the full path; do not paste those logs into tickets. See `docs/deployment.md`.
+
 FareHarbor does **not** recommend IP allowlisting because source IPs may change. This receiver does not allowlist IPs.
 
 ## Acknowledgement
