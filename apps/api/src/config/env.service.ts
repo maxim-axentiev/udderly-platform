@@ -32,4 +32,16 @@ export class EnvService {
   get isProduction(): boolean {
     return this.env.NODE_ENV === "production";
   }
+
+  get wherewolfApiKey(): string | undefined {
+    return this.env.WHEREWOLF_API_KEY;
+  }
+
+  get wherewolfAppId(): string | undefined {
+    return this.env.WHEREWOLF_APP_ID;
+  }
+
+  get isWherewolfConfigured(): boolean {
+    return Boolean(this.env.WHEREWOLF_API_KEY && this.env.WHEREWOLF_APP_ID);
+  }
 }

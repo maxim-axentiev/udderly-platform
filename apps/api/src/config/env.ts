@@ -1,6 +1,15 @@
 import { z } from "zod";
 import { loadEnvFiles } from "./load-env";
 
+const optionalTrimmedSecret = z.preprocess((value) => {
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}, z.string().min(1).optional());
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -13,6 +22,8 @@ const envSchema = z.object({
     .string({ required_error: "REDIS_URL is required" })
     .min(1, "REDIS_URL is required"),
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
+  WHEREWOLF_API_KEY: optionalTrimmedSecret,
+  WHEREWOLF_APP_ID: optionalTrimmedSecret,
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

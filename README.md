@@ -93,6 +93,25 @@ To also delete that local data:
 docker compose down -v
 ```
 
+## Wherewolf
+
+Wherewolf credentials are optional. The API starts without them.
+
+```
+WHEREWOLF_API_KEY=
+WHEREWOLF_APP_ID=
+```
+
+`WHEREWOLF_APP_ID` is sent as Wherewolf’s `pool` value.
+
+To inspect the structure of live Wherewolf data without printing personal information:
+
+```
+npm run audit:wherewolf
+```
+
+Guest requests always use `selection: "cropped"`. See `docs/wherewolf.md` for details.
+
 ## Useful commands
 
 ```
@@ -102,4 +121,5 @@ npm run typecheck
 npm run lint
 npm run db:generate
 npm run db:migrate
+npm run audit:wherewolf
 ```
