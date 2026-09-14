@@ -5,6 +5,7 @@ import { AppModule } from "../../app.module";
 import { loadEnvFiles } from "../../config/load-env";
 import { DatabaseService } from "../../database/database.service";
 import { integrationEvents } from "../../database/schema/integration-events";
+import { FareharborWebhookService } from "./fareharbor-webhook.service";
 import { FAREHARBOR_PROVIDER } from "./fareharbor.crypto";
 import {
   SYNTHETIC_BOOKING_UUID,
@@ -124,6 +125,25 @@ async function main(): Promise<void> {
     if (afterRejects.length !== 3) {
       throw new Error("rejected requests were persisted");
     }
+
+    const fareharbor = app.get(FareharborWebhookService);
+    await database.db
+      .update(integrationEvents)
+      .set({
+        processingStatus: "received",
+        processedAt: null,
+        processingError: null,
+      })
+      .where(eq(integrationEvents.id, firstEvent.id));
+
+    const recovery = await fareharbor.recoverEligibleEvents();
+    if (recovery.enqueued < 1) {
+      throw new Error("recovery did not enqueue the pending event");
+    }
+    await waitForStatus(database, firstEvent.id, "completed");
+    console.log(
+      "- pending event re-enqueued from PostgreSQL and processed without a FareHarbor retry",
+    );
 
     console.log("");
     console.log("FareHarbor synthetic webhook tests passed.");

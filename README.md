@@ -131,6 +131,12 @@ Local synthetic test (fake data only; needs PostgreSQL and Redis):
 npm run test:fareharbor-webhook
 ```
 
+If a webhook was saved but not processed (for example Redis was down):
+
+```
+npm run integrations:recover
+```
+
 ## Useful commands
 
 ```
@@ -142,4 +148,5 @@ npm run db:generate
 npm run db:migrate
 npm run audit:wherewolf
 npm run test:fareharbor-webhook
+npm run integrations:recover
 ```

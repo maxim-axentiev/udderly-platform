@@ -22,6 +22,13 @@ export const integrationEventStatuses = [
 export type IntegrationEventStatus =
   (typeof integrationEventStatuses)[number];
 
+export const recoverableIntegrationEventStatuses = [
+  "received",
+  "queued",
+  "processing",
+  "failed",
+] as const satisfies readonly IntegrationEventStatus[];
+
 export type IntegrationEventSafeMetadata = {
   bookingPk?: number | string;
   bookingStatus?: string;

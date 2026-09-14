@@ -52,9 +52,19 @@ FareHarbor does **not** recommend IP allowlisting because source IPs may change.
 
 ## Acknowledgement
 
-Return HTTP 200 after the raw event is durably stored (and queued when practical). Keep the HTTP handler fast. Do not normalize inside the request.
+Return HTTP 200 after the raw event is durably stored in PostgreSQL. Keep the HTTP handler fast. Do not normalize inside the request.
 
-If PostgreSQL cannot persist the event, do **not** return 200.
+If PostgreSQL cannot persist the event, do **not** return 200. FareHarbor should retry.
+
+If PostgreSQL persist succeeds but Redis/BullMQ is temporarily unavailable, return HTTP 200 anyway. PostgreSQL is the durable source of truth. The event stays in a recoverable status (`received` until queued, or `failed` after a processor error). Do not mark it completed.
+
+Re-enqueue recoverable events locally without waiting for FareHarbor:
+
+```
+npm run integrations:recover
+```
+
+That command finds `received`, `queued`, `processing`, and `failed` originals, enqueues them by internal event ID, skips duplicates/completed/in-flight jobs, and prints only counts. It does not print payloads or PII. There is no recurring scheduler yet.
 
 Invalid secret: generic 404.  
 Missing `booking.uuid`: HTTP 400.
@@ -66,9 +76,10 @@ Unknown extra fields are ignored. Additive FareHarbor schema changes must not br
 ```
 FareHarbor POST
   -> secret URL
-  -> integration_events row (JSONB payload)
-  -> BullMQ job { eventId }
+  -> integration_events row (JSONB payload)  [durable]
+  -> BullMQ job { eventId }               [best-effort]
   -> processor updates processing status
+  -> npm run integrations:recover         [if queueing failed]
 ```
 
 Payloads are treated as sensitive. They are not logged and are not returned from HTTP APIs.
@@ -99,6 +110,12 @@ Synthetic local test (fake data only):
 
 ```
 npm run test:fareharbor-webhook
+```
+
+Re-enqueue persisted events that never completed:
+
+```
+npm run integrations:recover
 ```
 
 ## Next step before real FareHarbor delivery

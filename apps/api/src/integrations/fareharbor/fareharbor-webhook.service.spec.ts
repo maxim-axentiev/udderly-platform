@@ -17,7 +17,7 @@ test("invalid FareHarbor payload is rejected before persistence", async () => {
         },
       },
     } as never,
-    { add: async () => undefined } as never,
+    { add: async () => undefined, getJob: async () => undefined } as never,
   );
 
   await assert.rejects(
@@ -47,7 +47,7 @@ test("database failure does not acknowledge receipt", async () => {
         }),
       },
     } as never,
-    { add: async () => undefined } as never,
+    { add: async () => undefined, getJob: async () => undefined } as never,
   );
 
   await assert.rejects(
@@ -56,4 +56,56 @@ test("database failure does not acknowledge receipt", async () => {
       error instanceof Error &&
       error.constructor.name === "ServiceUnavailableException",
   );
+});
+
+test("queue failure after persist still acknowledges and leaves the event recoverable", async () => {
+  const eventId = "11111111-1111-4111-8111-111111111111";
+  let inserted = false;
+  let markedQueued = false;
+
+  const service = new FareharborWebhookService(
+    {
+      isFareharborWebhookConfigured: true,
+      fareharborWebhookSecret: "test-secret",
+    } as never,
+    {
+      db: {
+        select: () => ({
+          from: () => ({
+            where: () => ({
+              orderBy: () => ({
+                limit: async () => [],
+              }),
+            }),
+          }),
+        }),
+        insert: () => ({
+          values: () => ({
+            returning: async () => {
+              inserted = true;
+              return [{ id: eventId }];
+            },
+          }),
+        }),
+        update: () => ({
+          set: () => ({
+            where: async () => {
+              markedQueued = true;
+            },
+          }),
+        }),
+      },
+    } as never,
+    {
+      getJob: async () => undefined,
+      add: async () => {
+        throw new Error("Redis unavailable");
+      },
+    } as never,
+  );
+
+  const result = await service.ingest(createSyntheticFareharborBookingPayload());
+  assert.equal(result.duplicate, false);
+  assert.equal(inserted, true);
+  assert.equal(markedQueued, false);
 });
