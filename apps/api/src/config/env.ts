@@ -24,6 +24,7 @@ const envSchema = z.object({
   WEB_ORIGIN: z.string().url().default("http://localhost:3000"),
   WHEREWOLF_API_KEY: optionalTrimmedSecret,
   WHEREWOLF_APP_ID: optionalTrimmedSecret,
+  FAREHARBOR_WEBHOOK_SECRET: optionalTrimmedSecret,
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

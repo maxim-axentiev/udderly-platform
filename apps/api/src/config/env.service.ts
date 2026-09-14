@@ -44,4 +44,12 @@ export class EnvService {
   get isWherewolfConfigured(): boolean {
     return Boolean(this.env.WHEREWOLF_API_KEY && this.env.WHEREWOLF_APP_ID);
   }
+
+  get fareharborWebhookSecret(): string | undefined {
+    return this.env.FAREHARBOR_WEBHOOK_SECRET;
+  }
+
+  get isFareharborWebhookConfigured(): boolean {
+    return Boolean(this.env.FAREHARBOR_WEBHOOK_SECRET);
+  }
 }

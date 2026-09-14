@@ -72,6 +72,7 @@ This starts both applications together.
 - API health: [http://localhost:3001/health](http://localhost:3001/health)
 - API readiness (Postgres + Redis): [http://localhost:3001/health/ready](http://localhost:3001/health/ready)
 - Web status page: [http://localhost:3000/health](http://localhost:3000/health)
+- FareHarbor status: [http://localhost:3001/integrations/fareharbor/status](http://localhost:3001/integrations/fareharbor/status)
 
 The health endpoint should return:
 
@@ -112,6 +113,24 @@ npm run audit:wherewolf
 
 Guest requests always use `selection: "cropped"`. See `docs/wherewolf.md` for details.
 
+## FareHarbor
+
+FareHarbor webhooks are optional. The API starts without `FAREHARBOR_WEBHOOK_SECRET`.
+
+When set, FareHarbor should POST to:
+
+```
+https://<host>/webhooks/fareharbor/<secret>
+```
+
+Use the **Booking with Payments** webhook. There is no FareHarbor HMAC header; the secret is the URL path. See `docs/fareharbor.md`.
+
+Local synthetic test (fake data only; needs PostgreSQL and Redis):
+
+```
+npm run test:fareharbor-webhook
+```
+
 ## Useful commands
 
 ```
@@ -122,4 +141,5 @@ npm run lint
 npm run db:generate
 npm run db:migrate
 npm run audit:wherewolf
+npm run test:fareharbor-webhook
 ```

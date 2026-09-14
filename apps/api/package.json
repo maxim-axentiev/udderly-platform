@@ -10,7 +10,8 @@
     "lint": "eslint src drizzle.config.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "audit:wherewolf": "tsx src/integrations/wherewolf/audit-wherewolf.cli.ts"
+    "audit:wherewolf": "tsx src/integrations/wherewolf/audit-wherewolf.cli.ts",
+    "test:fareharbor-webhook": "tsx --test src/integrations/fareharbor/fareharbor-webhook.service.spec.ts && tsx src/integrations/fareharbor/test-fareharbor-webhook.cli.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",
