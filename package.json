@@ -1,0 +1,28 @@
+{
+  "name": "udderly-platform",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Private business operations platform for Udderly Ridiculous Farm Life",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "postinstall": "npm run build -w @udderly/shared",
+    "dev": "npm run build -w @udderly/shared && concurrently --kill-others-on-fail -n web,api -c cyan,magenta \"npm run dev -w @udderly/web\" \"npm run dev -w @udderly/api\"",
+    "build": "npm run build --workspaces",
+    "typecheck": "npm run build -w @udderly/shared && npm run typecheck --workspaces",
+    "lint": "npm run lint --workspaces --if-present",
+    "db:generate": "npm run db:generate -w @udderly/api",
+    "db:migrate": "npm run db:migrate -w @udderly/api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "eslint": "^9.35.0",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.43.0"
+  }
+}
