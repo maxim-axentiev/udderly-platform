@@ -153,6 +153,8 @@ npm run map:fareharbor-experience -- --item-id <pk> --name "Miniature Donkey Vis
 npm run map:fareharbor-experience -- --item-id <pk> --experience-id <uuid>
 ```
 
+Those npm scripts run compiled `apps/api/dist` JavaScript (`node`, not `tsx`). Build the API first (`npm run build -w @udderly/api`). For unbuilt local source, use the `:dev` variants (`normalize:fareharbor:dev`, `map:fareharbor-experience:dev`, `integrations:recover:dev`).
+
 ## Next step before real FareHarbor delivery
 
 1. Put a long random secret in production `.env`.

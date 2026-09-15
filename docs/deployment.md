@@ -131,7 +131,7 @@ cd /opt/projects/udderly-platform
 docker compose -f docker-compose.production.yml run --rm --no-deps api npm run integrations:recover -w @udderly/api
 ```
 
-That runs `tsx src/integrations/recover-integration-events.cli.ts` (the existing `@udderly/api` script). Eligible inbox statuses: `received`, `queued`, `processing`, `failed`.
+That runs compiled `apps/api/dist/integrations/recover-integration-events.cli.js` (no `tsx`). Eligible inbox statuses: `received`, `queued`, `processing`, `failed`.
 
 Do not print environment variables or webhook secrets when recovering.
 

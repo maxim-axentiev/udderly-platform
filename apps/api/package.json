@@ -13,9 +13,12 @@
     "audit:wherewolf": "tsx src/integrations/wherewolf/audit-wherewolf.cli.ts",
     "audit:square": "tsx src/integrations/square/square-audit.cli.ts",
     "test:fareharbor-webhook": "tsx --test src/common/redact-webhook-path.middleware.spec.ts src/integrations/fareharbor/fareharbor-webhook.service.spec.ts src/integrations/fareharbor/fareharbor.snapshot.spec.ts && tsx src/integrations/fareharbor/test-fareharbor-webhook.cli.ts && tsx src/integrations/fareharbor/test-fareharbor-map.cli.ts",
-    "integrations:recover": "tsx src/integrations/recover-integration-events.cli.ts",
-    "normalize:fareharbor": "tsx src/integrations/fareharbor/normalize-fareharbor.cli.ts",
-    "map:fareharbor-experience": "tsx src/integrations/fareharbor/map-fareharbor-experience.cli.ts",
+    "integrations:recover": "node dist/integrations/recover-integration-events.cli.js",
+    "integrations:recover:dev": "tsx src/integrations/recover-integration-events.cli.ts",
+    "normalize:fareharbor": "node dist/integrations/fareharbor/normalize-fareharbor.cli.js",
+    "normalize:fareharbor:dev": "tsx src/integrations/fareharbor/normalize-fareharbor.cli.ts",
+    "map:fareharbor-experience": "node dist/integrations/fareharbor/map-fareharbor-experience.cli.js",
+    "map:fareharbor-experience:dev": "tsx src/integrations/fareharbor/map-fareharbor-experience.cli.ts",
     "test:fareharbor-map": "tsx src/integrations/fareharbor/test-fareharbor-map.cli.ts"
   },
   "dependencies": {
@@ -32,14 +35,14 @@
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "zod": "^3.25.76",
-    "drizzle-kit": "^0.31.4",
-    "tsx": "^4.20.5"
+    "drizzle-kit": "^0.31.4"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",
     "@nestjs/schematics": "^11.0.7",
     "@types/express": "^5.0.3",
     "@types/node": "^22.18.1",
+    "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }
 }
