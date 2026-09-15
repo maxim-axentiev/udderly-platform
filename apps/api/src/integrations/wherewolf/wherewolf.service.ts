@@ -52,6 +52,10 @@ export class WherewolfService {
     await client.getGuestsByFilter(range, 1);
   }
 
+  createClient(): WherewolfClient {
+    return this.requireClient();
+  }
+
   private requireClient(): WherewolfClient {
     const apiKey = this.env.wherewolfApiKey;
     const appId = this.env.wherewolfAppId;

@@ -68,3 +68,61 @@ Cropped guest records are used on purpose. Do not switch this to `full`. Full re
 - API key or App ID values
 
 No audit files are written. Do not save raw Wherewolf responses into the repo.
+
+## Manual import (sanitized snapshots)
+
+Pulls a small date window, sanitizes cropped guests and reservations, then writes `source_snapshot` only. Does not create visits.
+
+```
+npm run import:wherewolf -- --date 2026-09-15
+npm run import:wherewolf -- --from 2026-09-15 --to 2026-09-16
+```
+
+`--date` / `--from` / `--to` are **America/Toronto farm calendar dates**, not UTC dates. Internally the API window is stored/sent as timestamptz/UTC.
+
+Inclusive/exclusive: `--date 2026-09-15` is the half-open UTC range from local midnight 2026-09-15 through local midnight 2026-09-16 (`dateBegin <= t < dateEnd`). `--from A --to B` includes both local calendar dates: from local midnight A through local midnight of the day after B.
+
+`source_snapshot.observed_at` is when Goat Barn imported the record. It is not the visit date.
+
+Production scripts use compiled `apps/api/dist`. Local unbuilt source: `import:wherewolf:dev`.
+
+Do not persist DOB, signatures, IP, street address, full postal/ZIP, guardian identity, medical data, or raw unrestricted payloads. CLI output is counts only.
+
+## Safe inspection (before bulk normalize)
+
+```
+npm run inspect:wherewolf -- --date 2026-09-15
+```
+
+Reports aggregate counts for that farm date only (status, lastVisit/tripTimeslot presence, signed true/false/absent, mapped vs unmapped activity, reservation ids, visit-occurrence identity). No names, emails, phones, guest ids, postal codes, IP, signatures, or raw JSON.
+
+Attendance is **not** confirmed yet. Source `status` is preserved as unconfirmed. `signed=true` is not attendance.
+
+## Experience mapping
+
+Wherewolf `activitiesAsObjects.id` is the stable activity key (`provider=wherewolf`, `provider_object_type=activity`).
+
+```
+npm run map:wherewolf-experience -- --activity-id <id> --name "Farm Glamping"
+npm run map:wherewolf-experience -- --activity-id <id> --experience-id <canonical-uuid>
+```
+
+`--name` is canonical Udderly naming. Map a Wherewolf activity onto an existing FareHarbor-backed experience with `--experience-id` so Farm Glamping is not duplicated. No fuzzy match. Conflicting remaps are refused.
+
+## Manual visit normalization
+
+```
+npm run normalize:wherewolf -- --snapshot-id <uuid>
+npm run normalize:wherewolf -- --date 2026-09-15
+```
+
+Requires an explicit activity mapping and a deterministic visit-occurrence identity:
+
+- `wherewolf` / `guest_visit` / `{guestId}:r:{reservationsID}` when `reservationsID` exists
+- otherwise `{guestId}:t:{occurrenceInstant}` from `lastVisit`, `tripTimeslot`, or reservation start/date fields
+- if only `guest.id` is available, normalization is skipped (`insufficient visit occurrence identity`)
+
+`--date` selects snapshots by that occurrence instant on the America/Toronto farm date, never by `observed_at`. Snapshots with no visit/occurrence timing are skipped and counted.
+
+Creates/updates `visit` and `source_identity`. Does not create PERSON. Booking/session links only from explicit FareHarbor ids on aliases/`bookingLabel`/`displayId`. Source `status` is copied and treated as unconfirmed attendance. `signed=true` is not attendance.
+

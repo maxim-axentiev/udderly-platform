@@ -510,7 +510,7 @@ Webhook history of status changes stays in `integration_events`, not a history t
 
 **Now:** `integration_events` JSONB for FareHarbor Booking with Payments. Duplicates hashed. Indexed by provider + entity type + `booking.uuid`. Not exposed over HTTP.
 
-**Later:** `source_snapshot` for Wherewolf/Square/FH history pulls. Strip card_details; treat full Wherewolf (signatures/photos) as higher sensitivity than cropped.
+**Now:** `source_snapshot` for Wherewolf pull imports (sanitized guests/reservations). Unique on `(provider, entity_type, external_id, payload_hash)`. `observed_at` is import/observation time at Goat Barn, not the visit date. Square/FH history pulls still later. Never persist Wherewolf DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields.
 
 Normalized tables omit DOB, signatures, IP, cards, receipt URLs on purpose. Snapshots are how we re-derive or prove what the provider said.
 

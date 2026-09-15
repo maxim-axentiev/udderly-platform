@@ -27,7 +27,16 @@
     "normalize:fareharbor:dev": "npm run normalize:fareharbor:dev -w @udderly/api --",
     "map:fareharbor-experience": "npm run map:fareharbor-experience -w @udderly/api --",
     "map:fareharbor-experience:dev": "npm run map:fareharbor-experience:dev -w @udderly/api --",
-    "test:fareharbor-map": "npm run test:fareharbor-map -w @udderly/api"
+    "test:fareharbor-map": "npm run test:fareharbor-map -w @udderly/api",
+    "import:wherewolf": "npm run import:wherewolf -w @udderly/api --",
+    "import:wherewolf:dev": "npm run import:wherewolf:dev -w @udderly/api --",
+    "map:wherewolf-experience": "npm run map:wherewolf-experience -w @udderly/api --",
+    "map:wherewolf-experience:dev": "npm run map:wherewolf-experience:dev -w @udderly/api --",
+    "normalize:wherewolf": "npm run normalize:wherewolf -w @udderly/api --",
+    "normalize:wherewolf:dev": "npm run normalize:wherewolf:dev -w @udderly/api --",
+    "inspect:wherewolf": "npm run inspect:wherewolf -w @udderly/api --",
+    "inspect:wherewolf:dev": "npm run inspect:wherewolf:dev -w @udderly/api --",
+    "test:wherewolf-import": "npm run test:wherewolf-import -w @udderly/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

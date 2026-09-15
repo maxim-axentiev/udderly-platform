@@ -19,7 +19,16 @@
     "normalize:fareharbor:dev": "tsx src/integrations/fareharbor/normalize-fareharbor.cli.ts",
     "map:fareharbor-experience": "node dist/integrations/fareharbor/map-fareharbor-experience.cli.js",
     "map:fareharbor-experience:dev": "tsx src/integrations/fareharbor/map-fareharbor-experience.cli.ts",
-    "test:fareharbor-map": "tsx src/integrations/fareharbor/test-fareharbor-map.cli.ts"
+    "test:fareharbor-map": "tsx src/integrations/fareharbor/test-fareharbor-map.cli.ts",
+    "import:wherewolf": "node dist/integrations/wherewolf/import-wherewolf.cli.js",
+    "import:wherewolf:dev": "tsx src/integrations/wherewolf/import-wherewolf.cli.ts",
+    "map:wherewolf-experience": "node dist/integrations/wherewolf/map-wherewolf-experience.cli.js",
+    "map:wherewolf-experience:dev": "tsx src/integrations/wherewolf/map-wherewolf-experience.cli.ts",
+    "normalize:wherewolf": "node dist/integrations/wherewolf/normalize-wherewolf.cli.js",
+    "normalize:wherewolf:dev": "tsx src/integrations/wherewolf/normalize-wherewolf.cli.ts",
+    "inspect:wherewolf": "node dist/integrations/wherewolf/inspect-wherewolf.cli.js",
+    "inspect:wherewolf:dev": "tsx src/integrations/wherewolf/inspect-wherewolf.cli.ts",
+    "test:wherewolf-import": "tsx --test src/integrations/wherewolf/wherewolf.sanitize.spec.ts src/integrations/wherewolf/wherewolf.range.spec.ts src/integrations/wherewolf/wherewolf.occurrence.spec.ts src/integrations/wherewolf/wherewolf-inspect.spec.ts && tsx src/integrations/wherewolf/test-wherewolf-import.cli.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

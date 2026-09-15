@@ -1,6 +1,6 @@
 # Operational schema (Phase 1)
 
-PostgreSQL tables from migrations `apps/api/drizzle/0002_operational_core.sql` and `apps/api/drizzle/0003_booking_party_member_lifecycle.sql`. FareHarbor webhooks fill `integration_events` only. Operational booking tables stay empty until `npm run normalize:fareharbor`. Design: `docs/data-model.md`.
+PostgreSQL tables from migrations `apps/api/drizzle/0002_operational_core.sql`, `0003_booking_party_member_lifecycle.sql`, and `0004_source_snapshot.sql`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). Operational booking/visit tables stay empty until the matching normalize command. Design: `docs/data-model.md`.
 
 ## Tables
 
@@ -15,7 +15,15 @@ PostgreSQL tables from migrations `apps/api/drizzle/0002_operational_core.sql` a
 | `booking_party_member` | Expected participant |
 | `visit` | Actual attendance (PII geography/demographics) |
 
-Plus existing `platform_meta` and `integration_events`.
+Plus existing `platform_meta`, `integration_events`, and `source_snapshot`.
+
+## `source_snapshot`
+
+Pull-API copies. Unique `(provider, entity_type, external_id, payload_hash)` so the same sanitized source state is stored once; a later different hash is a new observation. Indexed `(provider, entity_type, external_id, observed_at)` for latest-state lookups.
+
+`observed_at` is the time Goat Barn imported/observed the source record. It is **not** the visit/business date.
+
+Wherewolf payloads are sanitized before insert (no DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields). `visit.postal` is left null for this phase.
 
 ## `source_identity`
 
@@ -44,6 +52,15 @@ npm run map:fareharbor-experience -- --item-id <pk> --experience-id <uuid>
 
 Rows use `provider = fareharbor`, `provider_object_type = item`, `external_id` = item PK as text. `external_label` is the provider item name, not the canonical `--name`. The mapping CLI leaves it null; the FareHarbor normalizer may fill it from `availability.item.name`. The command is idempotent. It will not overwrite an item that already maps to a different experience.
 
+Wherewolf activities are mapped with:
+
+```
+npm run map:wherewolf-experience -- --activity-id <id> --name "Farm Glamping"
+npm run map:wherewolf-experience -- --activity-id <id> --experience-id <uuid>
+```
+
+Rows use `provider = wherewolf`, `provider_object_type = activity`, `external_id` = `activitiesAsObjects.id` as text.
+
 ## Foreign keys
 
 All business FKs use **`ON DELETE RESTRICT`** so archiving/deleting an experience cannot silently drop bookings or visits.
@@ -63,7 +80,7 @@ Idempotency is `source_identity` (`fareharbor` / `booking` / uuid). Raw payloads
 - `booking_contact`: `name`, `email`, `phone`, marketing opt-in flags
 - `visit`: `city`, `postal`, `age_at_visit`, `age_band`, `is_minor`, `referral_source`, `marketing_opt_in`, `group_type`
 
-Not stored: DOB, signatures, waiver blobs, IP, street address, card data, payment amounts.
+Not stored: DOB, signatures, waiver blobs, IP, street address, full postal/ZIP from Wherewolf, card data, payment amounts.
 
 ## Not in this migration
 

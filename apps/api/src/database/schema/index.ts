@@ -12,3 +12,4 @@ export {
   bookingPartyMembers,
 } from "./bookings";
 export { visits } from "./visits";
+export { sourceSnapshots } from "./source-snapshots";
