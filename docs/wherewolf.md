@@ -100,7 +100,7 @@ Attendance is **not** confirmed yet. Source `status` is preserved as unconfirmed
 
 ## Experience mapping
 
-Wherewolf `activitiesAsObjects.id` is the stable activity key (`provider=wherewolf`, `provider_object_type=activity`).
+Wherewolf activity ids are the stable mapping key (`provider=wherewolf`, `provider_object_type=activity`, `external_id` as text). Guest snapshots may have only `activities: ["532251"]`. Reservation snapshots may also have `activitiesAsObjects`. Both shapes resolve the same mapping. Names are never guessed.
 
 ```
 npm run map:wherewolf-experience -- --activity-id <id> --name "Farm Glamping"

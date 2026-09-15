@@ -43,40 +43,6 @@ export function visitOccurrenceInstant(
   );
 }
 
-export function firstActivity(
-  payload: Record<string, unknown>,
-): { id: string; name?: string } | undefined {
-  const objects = payload.activitiesAsObjects;
-  if (Array.isArray(objects)) {
-    for (const entry of objects) {
-      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
-        continue;
-      }
-      const id = stringId((entry as { id?: unknown }).id);
-      if (id) {
-        return { id, name: stringId((entry as { name?: unknown }).name) };
-      }
-    }
-  }
-
-  const activities = payload.activities;
-  if (Array.isArray(activities)) {
-    for (const entry of activities) {
-      if (entry && typeof entry === "object" && !Array.isArray(entry)) {
-        const id = stringId((entry as { id?: unknown }).id);
-        if (id) {
-          return {
-            id,
-            name: stringId((entry as { name?: unknown }).name),
-          };
-        }
-      }
-    }
-  }
-
-  return undefined;
-}
-
 export function stringId(value: unknown): string | undefined {
   if (typeof value === "number" && Number.isFinite(value)) {
     return String(value);

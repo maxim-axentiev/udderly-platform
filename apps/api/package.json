@@ -28,7 +28,7 @@
     "normalize:wherewolf:dev": "tsx src/integrations/wherewolf/normalize-wherewolf.cli.ts",
     "inspect:wherewolf": "node dist/integrations/wherewolf/inspect-wherewolf.cli.js",
     "inspect:wherewolf:dev": "tsx src/integrations/wherewolf/inspect-wherewolf.cli.ts",
-    "test:wherewolf-import": "tsx --test src/integrations/wherewolf/wherewolf.sanitize.spec.ts src/integrations/wherewolf/wherewolf.range.spec.ts src/integrations/wherewolf/wherewolf.occurrence.spec.ts src/integrations/wherewolf/wherewolf-inspect.spec.ts && tsx src/integrations/wherewolf/test-wherewolf-import.cli.ts"
+    "test:wherewolf-import": "tsx --test src/integrations/wherewolf/wherewolf.sanitize.spec.ts src/integrations/wherewolf/wherewolf.range.spec.ts src/integrations/wherewolf/wherewolf.occurrence.spec.ts src/integrations/wherewolf/wherewolf.activity.spec.ts src/integrations/wherewolf/wherewolf-inspect.spec.ts && tsx src/integrations/wherewolf/test-wherewolf-import.cli.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

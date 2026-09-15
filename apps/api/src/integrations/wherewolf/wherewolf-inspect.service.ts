@@ -9,8 +9,8 @@ import {
   WHEREWOLF_PROVIDER,
   WHEREWOLF_RESERVATION_ENTITY,
 } from "./wherewolf.constants";
+import { firstActivity } from "./wherewolf.activity";
 import {
-  firstActivity,
   stringId,
   visitOccurrenceIdentity,
   visitOccurrenceInstant,

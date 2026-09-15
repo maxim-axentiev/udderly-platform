@@ -44,6 +44,7 @@ const GUEST_INSUFFICIENT = "880003";
 const GUEST_EARLY = "880004";
 const GUEST_LATE = "880005";
 const GUEST_REPEAT = "880010";
+const GUEST_STRING_ACTIVITY = "880020";
 const RESERVATION_ID = "770001";
 const RESERVATION_REPEAT_A = "770010";
 const RESERVATION_REPEAT_B = "770011";
@@ -80,11 +81,12 @@ async function main(): Promise<void> {
           lateTorontoGuest(),
           repeatGuest(RESERVATION_REPEAT_A, "2026-09-15T18:00:00.000Z"),
           repeatGuest(RESERVATION_REPEAT_B, "2026-09-15T19:00:00.000Z"),
+          stringActivityGuest(),
         ],
       },
     );
-    if (firstImport.snapshotsInserted !== 8) {
-      throw new Error("expected eight snapshots on first import");
+    if (firstImport.snapshotsInserted !== 9) {
+      throw new Error("expected nine snapshots on first import");
     }
     const secondImport = await importer.persistFetched(
       range,
@@ -167,7 +169,36 @@ async function main(): Promise<void> {
     if ((await visitCount(database, GUEST_LATE)) !== 1) {
       throw new Error("late Toronto evening should belong to 2026-09-15");
     }
+    const stringSnapshot = await latestGuestSnapshot(
+      database,
+      GUEST_STRING_ACTIVITY,
+    );
+    const stringApply = farmDay.results.find(
+      (row) => row.outcome === "applied" && row.snapshotId === stringSnapshot,
+    );
+    if (
+      stringApply?.outcome !== "applied" ||
+      stringApply.experienceName !== EXPERIENCE_NAME
+    ) {
+      throw new Error(
+        "activities string ids must resolve the mapped canonical experience",
+      );
+    }
+    const [stringPayload] = await database.db
+      .select({ payload: sourceSnapshots.payload })
+      .from(sourceSnapshots)
+      .where(eq(sourceSnapshots.id, stringSnapshot))
+      .limit(1);
+    if (
+      !stringPayload ||
+      "activitiesAsObjects" in stringPayload.payload ||
+      JSON.stringify(stringPayload.payload.activities) !==
+        JSON.stringify([ACTIVITY_ID])
+    ) {
+      throw new Error("string-activity guest snapshot shape was not preserved");
+    }
     console.log("- America/Toronto date boundaries select the farm day");
+    console.log("- activities string ids resolve the existing experience mapping");
 
     const again = await normalizer.normalize({ snapshotId: linkedSnapshot });
     if (again.results[0]?.outcome !== "applied") {
@@ -269,8 +300,8 @@ async function main(): Promise<void> {
     if (inspect.guestSnapshots < 1) {
       throw new Error("inspect should count farm-day guest snapshots");
     }
-    if (inspect.visitDateUnknown < 1) {
-      throw new Error("inspect should count snapshots with no visit date");
+    if (inspect.mappedActivity < 1) {
+      throw new Error("inspect must count string-id activities as mapped");
     }
     for (const banned of [
       GUEST_LINKED,
@@ -352,6 +383,16 @@ function lateTorontoGuest(): Record<string, unknown> {
     status: "completed",
     lastVisit: "2026-09-16T03:00:00.000Z",
     activitiesAsObjects: [{ id: Number(ACTIVITY_ID), name: "SYNTHETIC WW Glamping" }],
+  };
+}
+
+function stringActivityGuest(): Record<string, unknown> {
+  return {
+    id: GUEST_STRING_ACTIVITY,
+    status: "completed",
+    lastVisit: "2026-09-15T16:00:00.000Z",
+    reservationsID: "770088",
+    activities: [ACTIVITY_ID],
   };
 }
 
@@ -560,6 +601,7 @@ async function cleanup(database: DatabaseService): Promise<void> {
     GUEST_EARLY,
     GUEST_LATE,
     GUEST_REPEAT,
+    GUEST_STRING_ACTIVITY,
   ];
   const visitIdentities = await database.db
     .select({ internalEntityId: sourceIdentities.internalEntityId })
@@ -593,6 +635,7 @@ async function cleanup(database: DatabaseService): Promise<void> {
           RESERVATION_REPEAT_A,
           RESERVATION_REPEAT_B,
           "770099",
+          "770088",
         ]),
       ),
     );
@@ -610,6 +653,7 @@ async function cleanup(database: DatabaseService): Promise<void> {
             RESERVATION_REPEAT_B,
             FH_BOOKING_UUID,
             "770099",
+            "770088",
           ]),
           ...guestIds.map((guestId) =>
             like(sourceIdentities.externalId, `${guestId}:%`),

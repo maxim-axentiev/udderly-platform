@@ -59,7 +59,7 @@ npm run map:wherewolf-experience -- --activity-id <id> --name "Farm Glamping"
 npm run map:wherewolf-experience -- --activity-id <id> --experience-id <uuid>
 ```
 
-Rows use `provider = wherewolf`, `provider_object_type = activity`, `external_id` = `activitiesAsObjects.id` as text.
+Rows use `provider = wherewolf`, `provider_object_type = activity`, `external_id` = activity id as text from `activitiesAsObjects.id` or guest `activities` string ids.
 
 ## Foreign keys
 
