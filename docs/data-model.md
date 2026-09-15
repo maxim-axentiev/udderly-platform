@@ -1,6 +1,6 @@
 # Goat Barn proposed data model
 
-Architecture only. No tables in this document have been created in PostgreSQL. Current production code still stores only `platform_meta` and FareHarbor `integration_events`.
+Architecture for the Goat Barn business model. The **operational core** is implemented in PostgreSQL (migration `0002_operational_core`; see `docs/schema.md`). Financial tables (`sale` and related), PERSON, and consent are still design-only. FareHarbor `integration_events` remains the webhook inbox.
 
 This proposal is based on:
 
@@ -122,7 +122,7 @@ Later, if that Square customer is resolved to a PERSON, fill `internal_entity_ty
 - Rebooking: new booking UUID/pk rows; old identities stay on the old booking.
 - Square archived catalog: identity remains; `product.is_archived = true`.
 
-**Hot-path copies:** `booking.fareharbor_uuid` may be duplicated for queries. The registry remains the alias/history store.
+**Hot-path copies:** Phase 1 does **not** copy FareHarbor `booking.uuid` onto `booking`. Look up via `source_identity`.
 
 **PII:** no (ids only).
 
@@ -196,7 +196,7 @@ Canonical Udderly offering. Not a FareHarbor item PK.
 
 ### `session`
 
-Dated run of an experience (FH availability): `experience_id`, `starts_at` / `ends_at`, `capacity`, party size bounds, `online_booking_status`. Source identity: FH `availability.pk`.
+Dated run of an experience (FH availability). Implemented columns: `experience_id`, `start_at` / `end_at`, `capacity`, `status`. FareHarbor availability maps later through `source_identity`.
 
 Do not invent sessions from Wherewolf `tripTimeslot` strings. Store those on `visit`.
 
@@ -212,7 +212,7 @@ FareHarbor operational booking.
 
 **Fields**
 
-- `fareharbor_uuid` (convenience)
+- FareHarbor booking UUID lives in `source_identity` (no convenience copy on `booking`)
 - `status` — current FH status
 - `booked_at` / provider created time
 - `observed_at` — last ingest / webhook time
@@ -549,48 +549,41 @@ Normalized tables omit DOB, signatures, IP, cards, receipt URLs on purpose. Snap
 
 ## L. Phase 1 vs deferred
 
-Phase 1 is the **smallest set that can hold bookings, visits, and both revenue streams** without identity resolution or a consent ledger.
+The first business-data migration created the **operational core only** (`0002_operational_core`). It does not ingest data.
 
-### Build in the first business-data migration
+### Implemented (operational core)
 
-| Table | Why it is in Phase 1 |
+| Table | Why |
 | --- | --- |
-| `source_identity` | External ids, including unresolved Square customers |
+| `source_identity` | External ids, including unresolved |
 | `experience` | Canonical offering |
-| `experience_source_mapping` | FH item + WW activity |
-| `session` | FH availability |
+| `experience_source_mapping` | Curated FH item / WW activity / later Sanity → experience (real FK) |
+| `session` | Dated occurrence |
 | `booking` | FH operational booking |
-| `booking_contact` | Booker ≠ party (email/phone live here) |
+| `booking_contact` | Booker ≠ party |
 | `booking_party_member` | Expected participants |
-| `visit` | WW attendance + city/postal/age_band/referral |
-| `sale` | Revenue document (FH booking and/or Square Order) |
-| `sale_line_item` | Retail mix; simple experience line |
-| `payment` | Cash / tenders (not revenue) |
-| `refund` | Cash reversals |
-| `product_category` | Square categories |
-| `product` | Square items, including archived |
-| `product_variation` | Line-item join key |
+| `visit` | WW attendance facts |
 
-Keep using existing `integration_events`. Do not replace it.
+`experience_source_mapping` is retained: it is the assignment of a provider catalog object to an `experience` with a PostgreSQL FK. `source_identity` is the id registry and may be unresolved; it cannot FK to `experience`. Do not also store FareHarbor item / Wherewolf activity mappings only in `source_identity`.
 
-### Defer
+Keep using existing `integration_events`.
+
+### Next schema migrations (not built)
 
 | Table / feature | Why later |
 | --- | --- |
-| `person` | No matching yet; booker/visitor data sits on facts |
-| `person_contact_point` | Same |
-| `consent_event` | Last-seen flags on visit/contact suffice until Mailchimp/matching |
+| `sale`, `sale_line_item`, `payment`, `refund` | Financial core |
+| `product_category`, `product`, `product_variation` | Square catalog |
+| `person`, `person_contact_point` | Matching |
+| `consent_event` | Consent ledger (last-seen flags already on visit/contact) |
 | `booking_status_history` | Inbox already has webhook history |
-| `source_snapshot` | Needed when pull-ingest starts, not for table-shape of Phase 1 |
-| `person_observation` | Not in the model |
+| `source_snapshot` | Pull-API copies |
 | Canonical `order` | Not in the model |
 
-Phase 1 may ingest **one** source first (e.g. FareHarbor webhooks → booking + sale) while the other tables sit empty. The migration should still create the retail/visit tables so Square/Wherewolf do not require a second redesign.
+### Explicitly not this migration
 
-### Explicitly not Phase 1 work
-
-Fuzzy matching, PERSON creation jobs, Mailchimp, Sanity mappings, dashboards, recurring Square/Wherewolf sync, writing back Square `reference_id`.
+Ingestion, FareHarbor/Wherewolf/Square normalization workers, identity matching, dashboards, PERSON creation.
 
 ---
 
-This document is a blueprint. It does not create tables, importers, or matchers. Existing integrations stay unchanged.
+Existing integrations stay unchanged. No production rows are inserted by the schema migration.

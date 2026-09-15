@@ -156,7 +156,7 @@ npm run audit:square
 
 See `docs/square.md`.
 
-Proposed normalized business entities (design only, not implemented): `docs/data-model.md`.
+Proposed data model: `docs/data-model.md`. Operational tables (no ingest yet): `docs/schema.md`.
 
 ## Useful commands
 
