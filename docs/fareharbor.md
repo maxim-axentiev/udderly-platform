@@ -1,6 +1,6 @@
 # FareHarbor integration
 
-Event ingestion only. Raw webhooks are stored and queued. They are not normalized into PERSON, BOOKING, PARTICIPANT, or TRANSACTION records yet.
+Event ingestion. Raw webhooks are stored in `integration_events`. Inbox processing marks originals completed. Operational upserts (`session`, `booking`, `booking_contact`, `booking_party_member`, `source_identity`) are **manual** in this phase. PERSON, VISIT, SALE, and payments are not created. Canonical `experience` rows are not auto-created from FareHarbor item names.
 
 ## Why Booking with Payments
 
@@ -54,7 +54,7 @@ FareHarbor does **not** recommend IP allowlisting because source IPs may change.
 
 ## Acknowledgement
 
-Return HTTP 200 after the raw event is durably stored in PostgreSQL. Keep the HTTP handler fast. Do not normalize inside the request.
+Return HTTP 200 after the raw event is durably stored in PostgreSQL. Keep the HTTP handler fast. Do not normalize inside the request. The queue worker acknowledges inbox processing only; it does not write operational booking tables.
 
 If PostgreSQL cannot persist the event, do **not** return 200. FareHarbor should retry.
 
@@ -79,10 +79,29 @@ Unknown extra fields are ignored. Additive FareHarbor schema changes must not br
 FareHarbor POST
   -> secret URL
   -> integration_events row (JSONB payload)  [durable]
-  -> BullMQ job { eventId }               [best-effort]
-  -> processor updates processing status
+  -> BullMQ job { eventId }               [best-effort inbox complete]
   -> npm run integrations:recover         [if queueing failed]
+  -> npm run map:fareharbor-experience     [manual item → experience]
+  -> npm run normalize:fareharbor         [manual operational upsert]
 ```
+
+Normalize a stored original, including `completed` inbox rows:
+
+```
+npm run normalize:fareharbor -- --event-id <integration-event-uuid>
+npm run normalize:fareharbor -- --latest
+```
+
+`--latest` is the newest original (non-duplicate) FareHarbor booking event. Older events for the same booking UUID are skipped if a newer original exists. Missing `experience_source_mapping` for the FareHarbor item writes no operational rows and does not fail inbox processing.
+
+Map a FareHarbor item to a canonical experience before normalizing. No SQL, no fuzzy name match:
+
+```
+npm run map:fareharbor-experience -- --item-id <fareharbor-item-pk> --name "Miniature Donkey Visits"
+npm run map:fareharbor-experience -- --item-id <fareharbor-item-pk> --experience-id <canonical-experience-uuid>
+```
+
+`--name` creates a canonical experience only when no experience has that exact name. One exact name match is reused. Two or more exact matches stop for `--experience-id`. An item already mapped to a different experience is refused; remap is not implemented. `provider_object_type` is `item`. `--name` is the canonical experience name only; `external_label` stays null until a later normalize sees `booking.availability.item.name`. Item mappings are not copied into `source_identity`.
 
 Payloads are treated as sensitive. They are not logged and are not returned from HTTP APIs.
 
@@ -118,6 +137,20 @@ Re-enqueue persisted events that never completed:
 
 ```
 npm run integrations:recover
+```
+
+Manually normalize a stored FareHarbor booking event:
+
+```
+npm run normalize:fareharbor -- --event-id <uuid>
+npm run normalize:fareharbor -- --latest
+```
+
+Map a FareHarbor item to a canonical experience:
+
+```
+npm run map:fareharbor-experience -- --item-id <pk> --name "Miniature Donkey Visits"
+npm run map:fareharbor-experience -- --item-id <pk> --experience-id <uuid>
 ```
 
 ## Next step before real FareHarbor delivery

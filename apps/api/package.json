@@ -12,8 +12,11 @@
     "db:migrate": "drizzle-kit migrate",
     "audit:wherewolf": "tsx src/integrations/wherewolf/audit-wherewolf.cli.ts",
     "audit:square": "tsx src/integrations/square/square-audit.cli.ts",
-    "test:fareharbor-webhook": "tsx --test src/common/redact-webhook-path.middleware.spec.ts src/integrations/fareharbor/fareharbor-webhook.service.spec.ts && tsx src/integrations/fareharbor/test-fareharbor-webhook.cli.ts",
-    "integrations:recover": "tsx src/integrations/recover-integration-events.cli.ts"
+    "test:fareharbor-webhook": "tsx --test src/common/redact-webhook-path.middleware.spec.ts src/integrations/fareharbor/fareharbor-webhook.service.spec.ts src/integrations/fareharbor/fareharbor.snapshot.spec.ts && tsx src/integrations/fareharbor/test-fareharbor-webhook.cli.ts && tsx src/integrations/fareharbor/test-fareharbor-map.cli.ts",
+    "integrations:recover": "tsx src/integrations/recover-integration-events.cli.ts",
+    "normalize:fareharbor": "tsx src/integrations/fareharbor/normalize-fareharbor.cli.ts",
+    "map:fareharbor-experience": "tsx src/integrations/fareharbor/map-fareharbor-experience.cli.ts",
+    "test:fareharbor-map": "tsx src/integrations/fareharbor/test-fareharbor-map.cli.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

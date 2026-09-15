@@ -9,6 +9,9 @@ import {
 } from "./fareharbor.controller";
 import { FareharborWebhookProcessor } from "./fareharbor-webhook.processor";
 import { FareharborWebhookService } from "./fareharbor-webhook.service";
+import { FareharborNormalizer } from "./fareharbor-normalizer";
+import { FareharborNormalizeService } from "./fareharbor-normalize.service";
+import { FareharborExperienceMapService } from "./fareharbor-experience-map.service";
 
 @Module({
   imports: [
@@ -19,6 +22,12 @@ import { FareharborWebhookService } from "./fareharbor-webhook.service";
     }),
   ],
   controllers: [FareharborWebhookController, FareharborStatusController],
-  providers: [FareharborWebhookService, FareharborWebhookProcessor],
+  providers: [
+    FareharborWebhookService,
+    FareharborWebhookProcessor,
+    FareharborNormalizer,
+    FareharborNormalizeService,
+    FareharborExperienceMapService,
+  ],
 })
 export class FareharborModule {}

@@ -186,7 +186,7 @@ Canonical Udderly offering. Not a FareHarbor item PK.
 
 ### `experience_source_mapping`
 
-**Fields:** `experience_id`, `provider`, `provider_object_type` (`fareharbor_item` \| `wherewolf_activity` \| `sanity_experience`), `external_id`, `external_label`. Unique `(provider, provider_object_type, external_id)`.
+**Fields:** `experience_id`, `provider`, `provider_object_type` (`item` for FareHarbor, later `wherewolf_activity` \| `sanity_experience`), `external_id`, `external_label`. Unique `(provider, provider_object_type, external_id)`.
 
 **Evidence:** FH `availability.item.pk` + name; WW `activitiesAsObjects.id` + name.
 
@@ -252,7 +252,7 @@ Do not assume contact = `customers[0]`.
 
 Someone **expected** to attend. One row per FH `customers[].pk` for that booking’s life (new PKs after rebooking).
 
-**Fields:** `booking_id`, `person_id` nullable, `customer_type`, `checkin_status` (hint only), `sequence`. Booking-scoped custom fields (e.g. “how did you hear”) can sit here as nullable columns if useful, else remain in the webhook payload.
+**Fields:** `booking_id`, `source_identity_id` (FareHarbor customer, unresolved to PERSON), `customer_type`, `checkin_status` (hint only), `sequence`, `is_active`, `last_seen_at`, `removed_at`. Booking-scoped custom fields (e.g. “how did you hear”) can sit here as nullable columns if useful, else remain in the webhook payload.
 
 **Source of truth:** FareHarbor `customers[]`. Not nested Wherewolf `bookings[].guests`.
 

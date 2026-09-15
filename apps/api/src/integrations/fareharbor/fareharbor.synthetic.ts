@@ -93,6 +93,25 @@ export function createChangedSyntheticFareharborBookingPayload(): Record<
 > {
   return createSyntheticFareharborBookingPayload({
     status: "cancelled",
+    customer_count: 1,
+    customers: [
+      {
+        pk: 500001,
+        checkin_status: "no-show",
+        customer_type: {
+          pk: 400001,
+          singular: "Adult",
+          plural: "Adults",
+        },
+        custom_field_values: [
+          {
+            pk: 300001,
+            name: "SYNTHETIC How did you hear about us",
+            value: "SYNTHETIC search",
+          },
+        ],
+      },
+    ],
     cancellation: {
       reason: "SYNTHETIC cancellation for webhook test",
       cancelled_at: "2026-09-14T18:00:00.000Z",

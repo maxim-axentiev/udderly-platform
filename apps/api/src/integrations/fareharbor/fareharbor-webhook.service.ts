@@ -260,7 +260,6 @@ export class FareharborWebhookService {
       .select({
         id: integrationEvents.id,
         processingStatus: integrationEvents.processingStatus,
-        safeMetadata: integrationEvents.safeMetadata,
       })
       .from(integrationEvents)
       .where(eq(integrationEvents.id, eventId))
@@ -284,11 +283,6 @@ export class FareharborWebhookService {
       .where(eq(integrationEvents.id, eventId));
 
     try {
-      const status = event.safeMetadata?.bookingStatus ?? "unknown";
-      this.logger.log(
-        `Processed FareHarbor event ${eventId} (${status})`,
-      );
-
       await this.database.db
         .update(integrationEvents)
         .set({
