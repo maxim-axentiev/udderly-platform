@@ -56,4 +56,24 @@ export class EnvService {
   get isFareharborWebhookConfigured(): boolean {
     return Boolean(this.env.FAREHARBOR_WEBHOOK_SECRET);
   }
+
+  get squareAccessToken(): string | undefined {
+    return this.env.SQUARE_ACCESS_TOKEN;
+  }
+
+  get squareApplicationId(): string | undefined {
+    return this.env.SQUARE_APPLICATION_ID;
+  }
+
+  get squareLocationId(): string | undefined {
+    return this.env.SQUARE_LOCATION_ID;
+  }
+
+  get isSquareConfigured(): boolean {
+    return Boolean(
+      this.env.SQUARE_ACCESS_TOKEN &&
+        this.env.SQUARE_APPLICATION_ID &&
+        this.env.SQUARE_LOCATION_ID,
+    );
+  }
 }

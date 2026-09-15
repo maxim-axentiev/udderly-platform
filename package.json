@@ -19,6 +19,7 @@
     "db:generate": "npm run db:generate -w @udderly/api",
     "db:migrate": "npm run db:migrate -w @udderly/api",
     "audit:wherewolf": "npm run audit:wherewolf -w @udderly/api",
+    "audit:square": "npm run audit:square -w @udderly/api",
     "test:fareharbor-webhook": "npm run test:fareharbor-webhook -w @udderly/api",
     "integrations:recover": "npm run integrations:recover -w @udderly/api"
   },

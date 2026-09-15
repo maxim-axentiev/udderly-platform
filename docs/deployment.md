@@ -66,6 +66,7 @@ Optional (API starts without them):
 
 - `WHEREWOLF_API_KEY`, `WHEREWOLF_APP_ID`
 - `FAREHARBOR_WEBHOOK_SECRET`
+- `SQUARE_ACCESS_TOKEN`, `SQUARE_APPLICATION_ID`, `SQUARE_LOCATION_ID`
 
 Do not put real secrets in Git. Production Compose does not default `POSTGRES_PASSWORD`.
 
@@ -89,7 +90,7 @@ The script:
 4. Starts/updates Postgres and Redis and waits until they are healthy
 5. Runs **committed** Drizzle migrations as a one-off container (`npm run db:migrate -w @udderly/api`)
 6. Starts/updates the API only after migrations succeed
-7. Checks `/health` and `/health/ready` **inside** the API container
+7. Waits up to 60s (every 2s) for internal `GET /health`, then `GET /health/ready`
 8. Does not prune other Docker projects on the Droplet
 
 If migrations fail, the script stops. A new API container is not started from that failed run. An older API container, if still running, is left in place until a later successful `up`.

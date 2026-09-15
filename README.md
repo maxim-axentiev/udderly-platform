@@ -73,6 +73,7 @@ This starts both applications together.
 - API readiness (Postgres + Redis): [http://localhost:3001/health/ready](http://localhost:3001/health/ready)
 - Web status page: [http://localhost:3000/health](http://localhost:3000/health)
 - FareHarbor status: [http://localhost:3001/integrations/fareharbor/status](http://localhost:3001/integrations/fareharbor/status)
+- Square status: [http://localhost:3001/integrations/square/status](http://localhost:3001/integrations/square/status)
 
 The health endpoint should return:
 
@@ -137,6 +138,24 @@ If a webhook was saved but not processed (for example Redis was down):
 npm run integrations:recover
 ```
 
+## Square
+
+Square credentials are optional. The API starts without them.
+
+```
+SQUARE_ACCESS_TOKEN=
+SQUARE_APPLICATION_ID=
+SQUARE_LOCATION_ID=
+```
+
+Square is the intended farm-store transaction source. The current integration is read-only and does not import business data. To inspect live structure without printing customer or payment PII:
+
+```
+npm run audit:square
+```
+
+See `docs/square.md`.
+
 ## Useful commands
 
 ```
@@ -147,6 +166,7 @@ npm run lint
 npm run db:generate
 npm run db:migrate
 npm run audit:wherewolf
+npm run audit:square
 npm run test:fareharbor-webhook
 npm run integrations:recover
 ```

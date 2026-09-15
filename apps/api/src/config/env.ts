@@ -26,6 +26,9 @@ const envSchema = z.object({
   WHEREWOLF_API_KEY: optionalTrimmedSecret,
   WHEREWOLF_APP_ID: optionalTrimmedSecret,
   FAREHARBOR_WEBHOOK_SECRET: optionalTrimmedSecret,
+  SQUARE_ACCESS_TOKEN: optionalTrimmedSecret,
+  SQUARE_APPLICATION_ID: optionalTrimmedSecret,
+  SQUARE_LOCATION_ID: optionalTrimmedSecret,
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

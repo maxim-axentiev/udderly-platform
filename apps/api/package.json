@@ -11,6 +11,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "audit:wherewolf": "tsx src/integrations/wherewolf/audit-wherewolf.cli.ts",
+    "audit:square": "tsx src/integrations/square/square-audit.cli.ts",
     "test:fareharbor-webhook": "tsx --test src/common/redact-webhook-path.middleware.spec.ts src/integrations/fareharbor/fareharbor-webhook.service.spec.ts && tsx src/integrations/fareharbor/test-fareharbor-webhook.cli.ts",
     "integrations:recover": "tsx src/integrations/recover-integration-events.cli.ts"
   },
