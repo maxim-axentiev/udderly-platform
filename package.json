@@ -36,6 +36,8 @@
     "normalize:wherewolf:dev": "npm run normalize:wherewolf:dev -w @udderly/api --",
     "inspect:wherewolf": "npm run inspect:wherewolf -w @udderly/api --",
     "inspect:wherewolf:dev": "npm run inspect:wherewolf:dev -w @udderly/api --",
+    "resanitize:wherewolf": "npm run resanitize:wherewolf -w @udderly/api --",
+    "resanitize:wherewolf:dev": "npm run resanitize:wherewolf:dev -w @udderly/api --",
     "test:wherewolf-import": "npm run test:wherewolf-import -w @udderly/api"
   },
   "devDependencies": {

@@ -124,5 +124,15 @@ Requires an explicit activity mapping and a deterministic visit-occurrence ident
 
 `--date` selects snapshots by that occurrence instant on the America/Toronto farm date, never by `observed_at`. Snapshots with no visit/occurrence timing are skipped and counted.
 
-Creates/updates `visit` and `source_identity`. Does not create PERSON. Booking/session links only from explicit FareHarbor ids on aliases/`bookingLabel`/`displayId`. Source `status` is copied and treated as unconfirmed attendance. `signed=true` is not attendance.
+Creates/updates `visit` and `source_identity`. Does not create PERSON. Booking/session links only from the latest Wherewolf reservation snapshot for `guest.reservationsID`, using sanitized reservation `aliases` and operational `displayId` values that exactly match FareHarbor `booking` / `booking_pk` identities. `bookingLabel` is not persisted and is not used for matching. Source `status` is copied and treated as unconfirmed attendance. `signed=true` is not attendance.
+
+## Re-sanitize existing snapshots
+
+After deploying sanitizer changes, rewrite stored Wherewolf payloads (for example to drop `bookingLabel`) and recompute `payload_hash`:
+
+```
+npm run resanitize:wherewolf
+```
+
+Operates only on `provider=wherewolf` `source_snapshot` rows. Prints scanned / updated / deduplicated / unchanged. Does not print payload contents. If two historical snapshots become identical after sanitizing, the earliest `observed_at` row is kept.
 

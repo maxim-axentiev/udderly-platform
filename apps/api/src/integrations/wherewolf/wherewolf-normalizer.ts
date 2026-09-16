@@ -25,6 +25,7 @@ import {
   WHEREWOLF_RESERVATION_ENTITY,
 } from "./wherewolf.constants";
 import { firstActivity } from "./wherewolf.activity";
+import { operationalIdentifier } from "./wherewolf.sanitize";
 import {
   stringId,
   visitOccurrenceIdentity,
@@ -113,7 +114,7 @@ export class WherewolfNormalizer {
     }
 
     const experienceName = await this.experienceName(db, mapping.experienceId);
-    const linkage = await this.resolveBooking(db, payload);
+    const linkage = await this.resolveBooking(db, reservation?.payload);
     const sessionId = linkage.bookingId
       ? await this.sessionFromBooking(db, linkage.bookingId)
       : undefined;
@@ -134,7 +135,12 @@ export class WherewolfNormalizer {
       INTERNAL_VISIT,
       visitId,
     );
-    await this.upsertReservationIdentities(db, payload, linkage.bookingId);
+    await this.upsertReservationIdentities(
+      db,
+      payload,
+      reservation?.payload,
+      linkage.bookingId,
+    );
 
     if (activity.name && activity.name !== mapping.externalLabel) {
       await db
@@ -256,12 +262,12 @@ export class WherewolfNormalizer {
 
   private async resolveBooking(
     db: Db,
-    payload: Record<string, unknown>,
+    reservation: Record<string, unknown> | undefined,
   ): Promise<{
     bookingId?: string;
     confidence: "linked" | "unmatched" | "ambiguous";
   }> {
-    const candidates = bookingCandidates(payload);
+    const candidates = bookingCandidates(reservation);
     const bookingIds = new Set<string>();
 
     for (const candidate of candidates) {
@@ -308,8 +314,13 @@ export class WherewolfNormalizer {
         (row.entityType === FAREHARBOR_BOOKING_ENTITY ||
           row.entityType === FAREHARBOR_BOOKING_PK_ENTITY),
     );
-    if (matches.length === 1) {
-      return matches[0]?.internalEntityId ?? undefined;
+    const bookingIds = new Set(
+      matches
+        .map((row) => row.internalEntityId)
+        .filter((id): id is string => Boolean(id)),
+    );
+    if (bookingIds.size === 1) {
+      return [...bookingIds][0];
     }
     return undefined;
   }
@@ -402,10 +413,11 @@ export class WherewolfNormalizer {
 
   private async upsertReservationIdentities(
     db: Db,
-    payload: Record<string, unknown>,
+    guest: Record<string, unknown>,
+    reservation: Record<string, unknown> | undefined,
     bookingId: string | undefined,
   ): Promise<void> {
-    const reservationId = stringId(payload.reservationsID);
+    const reservationId = stringId(guest.reservationsID ?? reservation?.id);
     if (reservationId) {
       await this.upsertIdentity(
         db,
@@ -416,7 +428,7 @@ export class WherewolfNormalizer {
       );
     }
 
-    for (const alias of aliasValues(payload)) {
+    for (const alias of aliasValues(reservation ?? {})) {
       if (alias === reservationId) {
         continue;
       }
@@ -509,11 +521,15 @@ export class WherewolfNormalizer {
   }
 }
 
-function bookingCandidates(payload: Record<string, unknown>): string[] {
+function bookingCandidates(
+  reservation: Record<string, unknown> | undefined,
+): string[] {
+  if (!reservation) {
+    return [];
+  }
   const values = new Set<string>();
-  addCandidate(values, payload.bookingLabel);
-  addCandidate(values, payload.displayId);
-  for (const alias of aliasValues(payload)) {
+  addCandidate(values, reservation.displayId);
+  for (const alias of aliasValues(reservation)) {
     values.add(alias);
   }
   return [...values];
@@ -521,17 +537,19 @@ function bookingCandidates(payload: Record<string, unknown>): string[] {
 
 function aliasValues(payload: Record<string, unknown>): string[] {
   const aliases = payload.aliases;
-  if (!Array.isArray(aliases)) {
-    const single = stringId(aliases);
-    return single ? [single] : [];
+  const entries = Array.isArray(aliases) ? aliases : [aliases];
+  const values: string[] = [];
+  for (const entry of entries) {
+    const id = operationalIdentifier(entry);
+    if (id) {
+      values.push(id);
+    }
   }
-  return aliases
-    .map((entry) => stringId(entry))
-    .filter((entry): entry is string => Boolean(entry));
+  return values;
 }
 
 function addCandidate(set: Set<string>, value: unknown): void {
-  const id = stringId(value);
+  const id = operationalIdentifier(value);
   if (id) {
     set.add(id);
   }

@@ -26,7 +26,9 @@ import {
   WHEREWOLF_GUEST_ENTITY,
   WHEREWOLF_GUEST_VISIT_ENTITY,
   WHEREWOLF_PROVIDER,
+  WHEREWOLF_RESERVATION_ENTITY,
 } from "./wherewolf.constants";
+import { hashCanonicalJson } from "./wherewolf.hash";
 import { visitOccurrenceIdentity } from "./wherewolf.occurrence";
 import { farmDayRange } from "./wherewolf.range";
 import { WherewolfImportService } from "./wherewolf-import.service";
@@ -36,6 +38,7 @@ import {
   formatWherewolfInspect,
   WherewolfInspectService,
 } from "./wherewolf-inspect.service";
+import { WherewolfResanitizeService } from "./wherewolf-resanitize.service";
 
 const ACTIVITY_ID = "990001";
 const GUEST_LINKED = "880001";
@@ -45,10 +48,16 @@ const GUEST_EARLY = "880004";
 const GUEST_LATE = "880005";
 const GUEST_REPEAT = "880010";
 const GUEST_STRING_ACTIVITY = "880020";
+const GUEST_REPAIR = "880030";
+const GUEST_AMBIGUOUS = "880031";
+const DIRTY_GUEST = "889001";
 const RESERVATION_ID = "770001";
 const RESERVATION_REPEAT_A = "770010";
 const RESERVATION_REPEAT_B = "770011";
+const RESERVATION_REPAIR = "770030";
+const RESERVATION_AMBIGUOUS = "770031";
 const FH_BOOKING_UUID = "00000000-0000-4000-b000-0000000000aa";
+const FH_BOOKING_UUID_B = "00000000-0000-4000-b000-0000000000bb";
 const EXPERIENCE_NAME = "SYNTHETIC WW Farm Glamping";
 
 async function main(): Promise<void> {
@@ -61,6 +70,7 @@ async function main(): Promise<void> {
   const mapper = app.get(WherewolfExperienceMapService);
   const normalizer = app.get(WherewolfNormalizeService);
   const inspector = app.get(WherewolfInspectService);
+  const resanitizer = app.get(WherewolfResanitizeService);
 
   try {
     await cleanup(database);
@@ -158,6 +168,8 @@ async function main(): Promise<void> {
       matchConfidence: "linked",
       visitedAt: "2026-09-15T14:00:00.000Z",
     });
+    await assertReservationIdentity(database, RESERVATION_ID, bookingId);
+    console.log("- reservation alias links guest without booking identifiers");
     const earlySnapshot = await latestGuestSnapshot(database, GUEST_EARLY);
     if (
       farmDay.results.some(
@@ -251,6 +263,7 @@ async function main(): Promise<void> {
       matchConfidence: "unmatched",
       visitedAt: "2026-09-15T15:00:00.000Z",
     });
+    await assertReservationIdentity(database, "770099", null);
     console.log("- absent booking evidence leaves booking_id null");
 
     if ((await visitCount(database, GUEST_REPEAT)) !== 2) {
@@ -273,6 +286,216 @@ async function main(): Promise<void> {
     }
     console.log("- insufficient occurrence identity is skipped; signed=true is not attendance");
 
+    await importer.persistFetched(
+      range,
+      {
+        bookings: [
+          {
+            id: RESERVATION_REPAIR,
+            status: "ok",
+            activities: [ACTIVITY_ID],
+          },
+        ],
+      },
+      {
+        guests: [
+          {
+            id: GUEST_REPAIR,
+            status: "completed",
+            lastVisit: "2026-09-15T17:00:00.000Z",
+            reservationsID: RESERVATION_REPAIR,
+            activities: [ACTIVITY_ID],
+          },
+        ],
+      },
+    );
+    const repairSnapshot = await latestGuestSnapshot(database, GUEST_REPAIR);
+    const repairFirst = await normalizer.normalize({ snapshotId: repairSnapshot });
+    if (repairFirst.results[0]?.outcome !== "applied" || repairFirst.results[0].bookingLinked) {
+      throw new Error("repair guest should start unmatched without reservation aliases");
+    }
+    const repairVisitId = await visitIdForGuest(database, GUEST_REPAIR, RESERVATION_REPAIR);
+    await importer.persistFetched(
+      range,
+      {
+        bookings: [
+          {
+            id: RESERVATION_REPAIR,
+            status: "ok",
+            aliases: [FH_BOOKING_UUID],
+            activities: [ACTIVITY_ID],
+          },
+        ],
+      },
+      { guests: [] },
+    );
+    const repairSecond = await normalizer.normalize({ snapshotId: repairSnapshot });
+    if (
+      repairSecond.results[0]?.outcome !== "applied" ||
+      repairSecond.results[0].bookingLinked !== true ||
+      repairSecond.results[0].sessionLinked !== true
+    ) {
+      throw new Error("rerun should link the existing visit from reservation aliases");
+    }
+    if (
+      (await visitIdForGuest(database, GUEST_REPAIR, RESERVATION_REPAIR)) !==
+      repairVisitId
+    ) {
+      throw new Error("booking linkage must update the existing visit");
+    }
+    await assertVisit(database, GUEST_REPAIR, RESERVATION_REPAIR, {
+      bookingId,
+      sessionId,
+      status: "completed",
+      matchConfidence: "linked",
+      visitedAt: "2026-09-15T17:00:00.000Z",
+    });
+    await assertReservationIdentity(database, RESERVATION_REPAIR, bookingId);
+    console.log("- rerun updates existing visits when reservation aliases appear");
+
+    await importer.persistFetched(
+      range,
+      {
+        bookings: [
+          {
+            id: RESERVATION_AMBIGUOUS,
+            status: "ok",
+            aliases: [FH_BOOKING_UUID, FH_BOOKING_UUID_B],
+            activities: [ACTIVITY_ID],
+          },
+        ],
+      },
+      {
+        guests: [
+          {
+            id: GUEST_AMBIGUOUS,
+            status: "completed",
+            lastVisit: "2026-09-15T18:30:00.000Z",
+            reservationsID: RESERVATION_AMBIGUOUS,
+            activities: [ACTIVITY_ID],
+          },
+        ],
+      },
+    );
+    const ambiguous = await normalizer.normalize({
+      snapshotId: await latestGuestSnapshot(database, GUEST_AMBIGUOUS),
+    });
+    if (ambiguous.results[0]?.outcome !== "applied" || ambiguous.results[0].bookingLinked) {
+      throw new Error("multiple FareHarbor matches must stay unmatched");
+    }
+    await assertVisit(database, GUEST_AMBIGUOUS, RESERVATION_AMBIGUOUS, {
+      bookingId: null,
+      sessionId: null,
+      status: "completed",
+      matchConfidence: "ambiguous",
+      visitedAt: "2026-09-15T18:30:00.000Z",
+    });
+    await assertReservationIdentity(database, RESERVATION_AMBIGUOUS, null);
+    if ((await visitCount(database, GUEST_AMBIGUOUS)) !== 1) {
+      throw new Error("ambiguous linkage created extra visits");
+    }
+    console.log("- multiple distinct FareHarbor matches stay ambiguous");
+
+    const dirtyPayload = {
+      id: DIRTY_GUEST,
+      status: "completed",
+      bookingLabel: "SYNTHETIC Customer Name",
+      aliases: ["SYNTHETIC Customer Name", "person@example.invalid"],
+    };
+    const cleanEquivalent = {
+      id: DIRTY_GUEST,
+      status: "completed",
+    };
+    await database.db.insert(sourceSnapshots).values([
+      {
+        provider: WHEREWOLF_PROVIDER,
+        entityType: WHEREWOLF_GUEST_ENTITY,
+        externalId: DIRTY_GUEST,
+        observedAt: new Date("2026-09-01T00:00:00.000Z"),
+        payload: dirtyPayload,
+        payloadHash: hashCanonicalJson(dirtyPayload),
+      },
+      {
+        provider: WHEREWOLF_PROVIDER,
+        entityType: WHEREWOLF_GUEST_ENTITY,
+        externalId: DIRTY_GUEST,
+        observedAt: new Date("2026-09-02T00:00:00.000Z"),
+        payload: {
+          ...dirtyPayload,
+          lastVisit: "2026-09-15T00:00:00.000Z",
+        },
+        payloadHash: hashCanonicalJson({
+          ...dirtyPayload,
+          lastVisit: "2026-09-15T00:00:00.000Z",
+        }),
+      },
+    ]);
+    const firstResanitize = await resanitizer.resanitize();
+    if (firstResanitize.updated < 1) {
+      throw new Error("resanitize should recompute payload hashes");
+    }
+    const dirtyRows = await database.db
+      .select()
+      .from(sourceSnapshots)
+      .where(
+        and(
+          eq(sourceSnapshots.provider, WHEREWOLF_PROVIDER),
+          eq(sourceSnapshots.entityType, WHEREWOLF_GUEST_ENTITY),
+          eq(sourceSnapshots.externalId, DIRTY_GUEST),
+        ),
+      );
+    if (dirtyRows.length !== 2) {
+      throw new Error("distinct sanitized payloads should not collapse");
+    }
+    for (const row of dirtyRows) {
+      if ("bookingLabel" in row.payload) {
+        throw new Error("resanitize left bookingLabel in payload");
+      }
+      if (row.payloadHash !== hashCanonicalJson(row.payload)) {
+        throw new Error("resanitize left payload_hash stale");
+      }
+    }
+    await database.db.insert(sourceSnapshots).values({
+      provider: WHEREWOLF_PROVIDER,
+      entityType: WHEREWOLF_GUEST_ENTITY,
+      externalId: DIRTY_GUEST,
+      observedAt: new Date("2026-09-03T00:00:00.000Z"),
+      payload: {
+        ...cleanEquivalent,
+        bookingLabel: "SYNTHETIC Customer Name",
+      },
+      payloadHash: hashCanonicalJson({
+        ...cleanEquivalent,
+        bookingLabel: "SYNTHETIC Customer Name",
+      }),
+    });
+    const collide = await resanitizer.resanitize();
+    if (collide.deduplicated < 1) {
+      throw new Error("resanitize should deduplicate identical sanitized payloads");
+    }
+    const afterCollision = await database.db
+      .select()
+      .from(sourceSnapshots)
+      .where(
+        and(
+          eq(sourceSnapshots.provider, WHEREWOLF_PROVIDER),
+          eq(sourceSnapshots.entityType, WHEREWOLF_GUEST_ENTITY),
+          eq(sourceSnapshots.externalId, DIRTY_GUEST),
+        ),
+      );
+    const cleanHash = hashCanonicalJson(cleanEquivalent);
+    const cleanCopies = afterCollision.filter(
+      (row) => row.payloadHash === cleanHash,
+    );
+    if (cleanCopies.length !== 1) {
+      throw new Error("identical sanitized snapshots should keep one row");
+    }
+    const againResanitize = await resanitizer.resanitize();
+    if (againResanitize.updated !== 0 || againResanitize.deduplicated !== 0) {
+      throw new Error("resanitize should be idempotent");
+    }
+    console.log("- resanitize recomputes hashes, drops bookingLabel, and deduplicates");
+
     const snapshots = await database.db
       .select({ payload: sourceSnapshots.payload })
       .from(sourceSnapshots)
@@ -287,6 +510,7 @@ async function main(): Promise<void> {
         "email",
         "phoneNumber",
         "addressPostal",
+        "bookingLabel",
       ]) {
         if (keys.includes(banned)) {
           throw new Error(`banned field ${banned} persisted in source_snapshot`);
@@ -343,7 +567,6 @@ function linkedGuest(status: string): Record<string, unknown> {
     city: "Woodstock",
     addressPostal: "N0N 0N0",
     reservationsID: RESERVATION_ID,
-    aliases: [FH_BOOKING_UUID],
     activitiesAsObjects: [{ id: Number(ACTIVITY_ID), name: "SYNTHETIC WW Glamping" }],
   };
 }
@@ -419,7 +642,6 @@ function linkedReservation(): Record<string, unknown> {
     },
     guests: [{ name: "should not persist" }],
     aliases: [FH_BOOKING_UUID],
-    bookingLabel: FH_BOOKING_UUID,
     displayId: "WW-770001",
     status: "ok",
     activitiesAsObjects: [{ id: Number(ACTIVITY_ID), name: "SYNTHETIC WW Glamping" }],
@@ -430,6 +652,7 @@ async function seedFareharborBooking(database: DatabaseService): Promise<{
   experienceId: string;
   sessionId: string;
   bookingId: string;
+  bookingIdB: string;
 }> {
   const [experience] = await database.db
     .insert(experiences)
@@ -475,7 +698,28 @@ async function seedFareharborBooking(database: DatabaseService): Promise<{
     internalEntityId: bookingId,
   });
 
-  return { experienceId, sessionId, bookingId };
+  const [bookingB] = await database.db
+    .insert(bookings)
+    .values({
+      sessionId,
+      experienceId,
+      status: "booked",
+      partySize: 1,
+    })
+    .returning({ id: bookings.id });
+  const bookingIdB = bookingB?.id;
+  if (!bookingIdB) {
+    throw new Error("second booking seed failed");
+  }
+  await database.db.insert(sourceIdentities).values({
+    provider: FAREHARBOR_PROVIDER,
+    entityType: FAREHARBOR_BOOKING_ENTITY,
+    externalId: FH_BOOKING_UUID_B,
+    internalEntityType: FH_INTERNAL_BOOKING,
+    internalEntityId: bookingIdB,
+  });
+
+  return { experienceId, sessionId, bookingId, bookingIdB };
 }
 
 async function latestGuestSnapshot(
@@ -502,6 +746,67 @@ async function latestGuestSnapshot(
     throw new Error(`missing snapshot for guest ${guestId}`);
   }
   return latest.id;
+}
+
+async function visitIdForGuest(
+  database: DatabaseService,
+  guestId: string,
+  reservationId: string,
+): Promise<string> {
+  const occurrence = visitOccurrenceIdentity(guestId, {
+    reservationsID: reservationId,
+  });
+  if (!occurrence) {
+    throw new Error("expected occurrence for visit id lookup");
+  }
+  const [identity] = await database.db
+    .select({ internalEntityId: sourceIdentities.internalEntityId })
+    .from(sourceIdentities)
+    .where(
+      and(
+        eq(sourceIdentities.provider, WHEREWOLF_PROVIDER),
+        eq(sourceIdentities.entityType, WHEREWOLF_GUEST_VISIT_ENTITY),
+        eq(sourceIdentities.externalId, occurrence.key),
+      ),
+    )
+    .limit(1);
+  if (!identity?.internalEntityId) {
+    throw new Error("visit identity missing");
+  }
+  return identity.internalEntityId;
+}
+
+async function assertReservationIdentity(
+  database: DatabaseService,
+  reservationId: string,
+  bookingId: string | null,
+): Promise<void> {
+  const [identity] = await database.db
+    .select()
+    .from(sourceIdentities)
+    .where(
+      and(
+        eq(sourceIdentities.provider, WHEREWOLF_PROVIDER),
+        eq(sourceIdentities.entityType, WHEREWOLF_RESERVATION_ENTITY),
+        eq(sourceIdentities.externalId, reservationId),
+      ),
+    )
+    .limit(1);
+  if (!identity) {
+    throw new Error(`reservation identity missing for ${reservationId}`);
+  }
+  if (bookingId) {
+    if (
+      identity.internalEntityType !== "booking" ||
+      identity.internalEntityId !== bookingId
+    ) {
+      throw new Error("reservation identity was not resolved to the booking");
+    }
+    return;
+  }
+  if (identity.internalEntityId || identity.internalEntityType) {
+    throw new Error("reservation identity should stay unresolved");
+  }
 }
 
 async function visitCount(
@@ -602,6 +907,9 @@ async function cleanup(database: DatabaseService): Promise<void> {
     GUEST_LATE,
     GUEST_REPEAT,
     GUEST_STRING_ACTIVITY,
+    GUEST_REPAIR,
+    GUEST_AMBIGUOUS,
+    DIRTY_GUEST,
   ];
   const visitIdentities = await database.db
     .select({ internalEntityId: sourceIdentities.internalEntityId })
@@ -634,6 +942,8 @@ async function cleanup(database: DatabaseService): Promise<void> {
           RESERVATION_ID,
           RESERVATION_REPEAT_A,
           RESERVATION_REPEAT_B,
+          RESERVATION_REPAIR,
+          RESERVATION_AMBIGUOUS,
           "770099",
           "770088",
         ]),
@@ -651,7 +961,10 @@ async function cleanup(database: DatabaseService): Promise<void> {
             RESERVATION_ID,
             RESERVATION_REPEAT_A,
             RESERVATION_REPEAT_B,
+            RESERVATION_REPAIR,
+            RESERVATION_AMBIGUOUS,
             FH_BOOKING_UUID,
+            FH_BOOKING_UUID_B,
             "770099",
             "770088",
           ]),
@@ -668,7 +981,10 @@ async function cleanup(database: DatabaseService): Promise<void> {
     .where(
       and(
         eq(sourceIdentities.provider, FAREHARBOR_PROVIDER),
-        eq(sourceIdentities.externalId, FH_BOOKING_UUID),
+        inArray(sourceIdentities.externalId, [
+          FH_BOOKING_UUID,
+          FH_BOOKING_UUID_B,
+        ]),
       ),
     );
   const bookingIds = fhIdentities
@@ -689,7 +1005,10 @@ async function cleanup(database: DatabaseService): Promise<void> {
     .where(
       and(
         eq(sourceIdentities.provider, FAREHARBOR_PROVIDER),
-        eq(sourceIdentities.externalId, FH_BOOKING_UUID),
+        inArray(sourceIdentities.externalId, [
+          FH_BOOKING_UUID,
+          FH_BOOKING_UUID_B,
+        ]),
       ),
     );
 

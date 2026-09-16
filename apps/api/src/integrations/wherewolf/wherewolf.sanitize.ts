@@ -20,7 +20,6 @@ const GUEST_KEYS = new Set([
   "howManyPeople",
   "howManyTimesBeen",
   "friends",
-  "bookingLabel",
   "aliases",
   "displayId",
 ]);
@@ -33,7 +32,6 @@ const RESERVATION_KEYS = new Set([
   "activities",
   "activitiesAsObjects",
   "aliases",
-  "bookingLabel",
   "displayId",
   "reservationsID",
   "startTime",
@@ -53,6 +51,19 @@ export function sanitizeWherewolfReservation(
   record: unknown,
 ): Record<string, unknown> | undefined {
   return sanitizeRecord(record, RESERVATION_KEYS);
+}
+
+export function sanitizeWherewolfSnapshotPayload(
+  entityType: string,
+  payload: unknown,
+): Record<string, unknown> | undefined {
+  if (entityType === "guest") {
+    return sanitizeWherewolfGuest(payload);
+  }
+  if (entityType === "reservation") {
+    return sanitizeWherewolfReservation(payload);
+  }
+  return undefined;
 }
 
 function sanitizeRecord(
@@ -186,19 +197,35 @@ function sanitizeActivities(value: unknown): unknown {
 }
 
 function sanitizeAliases(value: unknown): unknown {
-  if (!Array.isArray(value)) {
-    const id = idValue(value);
-    return id ? [id] : undefined;
-  }
-
   const aliases: string[] = [];
-  for (const entry of value) {
-    const id = idValue(entry);
-    if (id) {
+  const seen = new Set<string>();
+  const entries = Array.isArray(value) ? value : [value];
+  for (const entry of entries) {
+    const id = operationalIdentifier(entry);
+    if (id && !seen.has(id)) {
+      seen.add(id);
       aliases.push(id);
     }
   }
   return aliases.length > 0 ? aliases : undefined;
+}
+
+export function operationalIdentifier(value: unknown): string | undefined {
+  const text = idValue(value);
+  if (!text) {
+    return undefined;
+  }
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      text,
+    )
+  ) {
+    return text;
+  }
+  if (/^\d+$/.test(text)) {
+    return text;
+  }
+  return undefined;
 }
 
 function idValue(value: unknown): string | undefined {

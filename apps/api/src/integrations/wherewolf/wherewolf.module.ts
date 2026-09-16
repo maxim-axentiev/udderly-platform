@@ -7,6 +7,7 @@ import { WherewolfExperienceMapService } from "./wherewolf-experience-map.servic
 import { WherewolfNormalizer } from "./wherewolf-normalizer";
 import { WherewolfNormalizeService } from "./wherewolf-normalize.service";
 import { WherewolfInspectService } from "./wherewolf-inspect.service";
+import { WherewolfResanitizeService } from "./wherewolf-resanitize.service";
 
 @Module({
   imports: [DatabaseModule],
@@ -18,6 +19,7 @@ import { WherewolfInspectService } from "./wherewolf-inspect.service";
     WherewolfNormalizer,
     WherewolfNormalizeService,
     WherewolfInspectService,
+    WherewolfResanitizeService,
   ],
   exports: [
     WherewolfService,
@@ -25,6 +27,7 @@ import { WherewolfInspectService } from "./wherewolf-inspect.service";
     WherewolfExperienceMapService,
     WherewolfNormalizeService,
     WherewolfInspectService,
+    WherewolfResanitizeService,
   ],
 })
 export class WherewolfModule {}

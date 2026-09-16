@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sanitizeWherewolfGuest } from "./wherewolf.sanitize";
+import {
+  sanitizeWherewolfGuest,
+  sanitizeWherewolfReservation,
+} from "./wherewolf.sanitize";
 
 test("sanitized guest snapshots drop DOB, signature, IP, and contact PII", () => {
   const sanitized = sanitizeWherewolfGuest({
@@ -52,4 +55,45 @@ test("boolean signed is kept and string signatures are dropped", () => {
     signed: true,
   });
   assert.equal(sanitized?.signed, true);
+});
+
+test("H. bookingLabel never survives guest or reservation sanitization", () => {
+  const guest = sanitizeWherewolfGuest({
+    id: "880001",
+    bookingLabel: "SYNTHETIC Customer Name",
+  });
+  const reservation = sanitizeWherewolfReservation({
+    id: "770001",
+    bookingLabel: "SYNTHETIC Customer Name",
+  });
+  assert.equal(guest && "bookingLabel" in guest, false);
+  assert.equal(reservation && "bookingLabel" in reservation, false);
+});
+
+test("I. free-text name/email aliases are discarded", () => {
+  const sanitized = sanitizeWherewolfReservation({
+    id: "770001",
+    aliases: [
+      "SYNTHETIC Customer Name",
+      "person@example.invalid",
+      "+15555550100",
+      "WW-770001",
+    ],
+  });
+  assert.equal(sanitized && "aliases" in sanitized, false);
+});
+
+test("J. UUID and decimal-id aliases survive sanitization", () => {
+  const sanitized = sanitizeWherewolfReservation({
+    id: "770001",
+    aliases: [
+      "00000000-0000-4000-b000-0000000000aa",
+      123456,
+      "SYNTHETIC Name",
+    ],
+  });
+  assert.deepEqual(sanitized?.aliases, [
+    "00000000-0000-4000-b000-0000000000aa",
+    "123456",
+  ]);
 });
