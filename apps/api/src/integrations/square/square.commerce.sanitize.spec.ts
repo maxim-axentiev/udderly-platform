@@ -73,7 +73,7 @@ test("sanitizes payment without card, fingerprint, or receipt URL", () => {
     amount_money: { amount: 400, currency: "CAD" },
     tip_money: { amount: 100, currency: "CAD" },
     processing_fee: [
-      { type: "INITIAL", amount_money: { amount: -30, currency: "CAD" } },
+      { type: "INITIAL", amount_money: { amount: 30, currency: "CAD" } },
     ],
     card_details: { fingerprint: "secret", card: { last_4: "1111" } },
     receipt_url: "https://example.invalid/receipt",
@@ -83,7 +83,7 @@ test("sanitizes payment without card, fingerprint, or receipt URL", () => {
   assert.equal(sanitized?.processing_fee_amount, 30);
   const fees = sanitized?.processing_fee as Record<string, unknown>[];
   assert.equal(fees[0]?.type, "INITIAL");
-  assert.deepEqual(fees[0]?.amount_money, { amount: -30, currency: "CAD" });
+  assert.deepEqual(fees[0]?.amount_money, { amount: 30, currency: "CAD" });
   assert.equal("card_details" in (sanitized ?? {}), false);
   assert.equal("receipt_url" in (sanitized ?? {}), false);
   assert.equal("buyer_email_address" in (sanitized ?? {}), false);

@@ -46,6 +46,7 @@ const PAY_CARD = "SYN-SQ-COM-PAY-CARD";
 const PAY_EXT = "SYN-SQ-COM-PAY-EXT";
 const PAY_ORPHAN = "SYN-SQ-COM-PAY-ORPHAN";
 const PAY_TIP = "SYN-SQ-COM-PAY-TIP";
+const PAY_CREDIT = "SYN-SQ-COM-PAY-CREDIT";
 const REF_A = "SYN-SQ-COM-REF-A";
 const CUST = "SYN-SQ-COM-CUST";
 const VAR = "SYN-SQ-COM-VAR";
@@ -68,6 +69,7 @@ const ALL_EXTERNAL_IDS = [
   PAY_EXT,
   PAY_ORPHAN,
   PAY_TIP,
+  PAY_CREDIT,
   REF_A,
   CUST,
   VAR,
@@ -201,15 +203,23 @@ async function main(): Promise<void> {
         payment(PAY_TIP, ORDER_TIP, {
           amount: 1000,
           tip: 100,
-          fee: -30,
+          fee: 30,
           method: "CARD",
+        }),
+        payment(PAY_CREDIT, ORDER_A, {
+          amount: 0,
+          method: "CARD",
+          fees: [
+            { type: "INITIAL", amount: 300 },
+            { type: "ADJUSTMENT", amount: -400 },
+          ],
         }),
       ],
       refunds: [
         refund(REF_A, PAY_CASH, ORDER_A, 200),
       ],
     });
-    if (first.ordersFetched !== 11 || first.paymentsFetched !== 5) {
+    if (first.ordersFetched !== 11 || first.paymentsFetched !== 6) {
       throw new Error("expected synthetic commerce fetch counts");
     }
     if (first.refundsFetched !== 1 || first.snapshotsInserted < 1) {
@@ -224,7 +234,10 @@ async function main(): Promise<void> {
     }
     console.log("- unchanged import does not duplicate snapshots");
 
-    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const firstNorm = await normalizer.normalizeWindow({ date: FARM_DATE });
+    if (firstNorm.invalidProcessingFees < 1) {
+      throw new Error("net fee credit must be reported, not stored as a fee");
+    }
 
     const saleA = await loadSale(database, ORDER_A);
     if (saleA.kind !== "retail" || saleA.status !== "completed") {
@@ -367,6 +380,10 @@ async function main(): Promise<void> {
     }
     if (tipPay.processingFeeAmount !== 30) {
       throw new Error("processing fee must be stored separately as a positive cost");
+    }
+    const creditPay = await loadPayment(database, PAY_CREDIT);
+    if (creditPay.processingFeeAmount !== null) {
+      throw new Error("net fee credit must leave processing_fee_amount null");
     }
     console.log("- tip excluded from sale; fee stored on payment");
 
@@ -516,6 +533,9 @@ async function main(): Promise<void> {
     if (second.unresolvedPayments < 1) {
       throw new Error("expected unresolved orphan payment to remain counted");
     }
+    if (second.invalidProcessingFees < 1) {
+      throw new Error("net fee credit must remain reported on rerun");
+    }
     const saleCount = await countIdentities(database, SQUARE_ORDER_ENTITY, [
       ORDER_A,
       ORDER_EMPTY,
@@ -617,9 +637,18 @@ function payment(
     amount: number;
     tip?: number;
     fee?: number;
+    fees?: { type: string; amount: number }[];
     method: string;
   },
 ): Record<string, unknown> {
+  const processingFee =
+    options.fees?.map((entry) => ({
+      type: entry.type,
+      amount_money: money(entry.amount),
+    })) ??
+    (options.fee === undefined
+      ? undefined
+      : [{ type: "INITIAL", amount_money: money(options.fee) }]);
   return {
     id,
     order_id: orderId,
@@ -630,10 +659,7 @@ function payment(
     source_type: options.method,
     amount_money: money(options.amount),
     tip_money: money(options.tip ?? 0),
-    processing_fee:
-      options.fee === undefined
-        ? undefined
-        : [{ amount_money: money(options.fee) }],
+    processing_fee: processingFee,
   };
 }
 

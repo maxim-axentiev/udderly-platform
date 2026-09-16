@@ -62,7 +62,7 @@ Square order updates expose the **current** `line_items` array. `0007_sale_line_
 
 ## `payment` / `refund`
 
-`payment.sale_id` is required. `amount` is cash applied to the sale **excluding** tip (`Square amount_money`, not `total_money`). `tip_amount` defaults to 0. `processing_fee_amount` is the nonnegative **net** Square fee cost (`-sum(signed processing_fee amounts)` when that sum is ≤ 0); a net credit is reported, not stored as a fake fee. No card PAN/last4/fingerprints/receipt URLs.
+`payment.sale_id` is required. `amount` is cash applied to the sale **excluding** tip (`Square amount_money`, not `total_money`). `tip_amount` defaults to 0. `processing_fee_amount` is the nonnegative **net** Square fee cost (`sum(signed processing_fee amounts)` when that sum is ≥ 0; production INITIAL amounts are positive). A negative net credit is reported and left null, not stored as a fee. No card PAN/last4/fingerprints/receipt URLs.
 
 `refund` amounts are positive integer minor units with an explicit 3-letter `currency` on the refund row (not inferred from payment/sale). Either `sale_id` or `payment_id` (or both) must be set. Not modeled as negative payments.
 

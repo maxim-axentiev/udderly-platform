@@ -102,16 +102,15 @@ export function sanitizeMoney(value: unknown): SquareMoneyParts | undefined {
 /**
  * Square Payments API `processing_fee[]` (Square-Version 2026-08-19).
  *
- * Each entry has a signed `amount_money` and `type` (`INITIAL` | `ADJUSTMENT`).
- * Negative amounts are money taken from the merchant (fee cost).
- * Positive amounts are money returned (fee reversal / adjustment).
+ * Confirmed from production (2026-09-12): INITIAL `amount_money.amount` is
+ * positive and is merchant processing-fee cost. ADJUSTMENT may be negative.
  *
- * Canonical cost is the nonnegative net:
- *   net_signed = sum(amount_money.amount)
- *   cost       = -net_signed   when net_signed <= 0
+ *   net_signed = sum(processing_fee[].amount_money.amount)
  *
- * A positive net_signed is a net credit to the merchant, which cannot be stored
- * as a nonnegative fee cost. That case is reported, not clamped to 0.
+ * - no entries: no fee
+ * - net_signed > 0: canonical cost = net_signed
+ * - net_signed = 0: canonical cost = 0 (e.g. fully reversed)
+ * - net_signed < 0: net credit; cannot store as nonnegative cost. Report it.
  */
 export type ProcessingFeeNet =
   | { status: "none" }
@@ -135,10 +134,10 @@ export function netProcessingFeeCost(value: unknown): ProcessingFeeNet {
   if (!seen) {
     return { status: "none" };
   }
-  if (netSigned > 0) {
+  if (netSigned < 0) {
     return { status: "invalid_net_credit", netSigned };
   }
-  return { status: "cost", amount: netSigned === 0 ? 0 : -netSigned };
+  return { status: "cost", amount: netSigned };
 }
 
 export function sanitizeProcessingFees(

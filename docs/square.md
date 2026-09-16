@@ -180,7 +180,7 @@ Payments and refunds are still selected by their own ListPayments/ListRefunds `b
 
 Sanitized order fields: `id`, `location_id`, `state`, `created_at`, `updated_at`, `closed_at`, `version`, `customer_id` (unresolved evidence only), `source.name`/`type`, `net_amounts` money parts, top-level total money fallbacks, `line_items` (uid, catalog ids/version, names, quantity, money parts, modifier name/price only), `tenders` (`id`, `type`, `payment_id` only). No notes, fulfillments, or customer contact.
 
-Sanitized payment fields: `id`, `order_id`, `location_id`, `status`, timestamps, `customer_id`, `source_type`, `amount_money`, `total_money`, `tip_money`, `refunded_money`, `approved_money`, signed `processing_fee[]` (`type`, `effective_at`, `amount_money`). Derived `processing_fee_amount` is the nonnegative **net** cost when valid. A net Square credit is stored as `processing_fee_invalid = net_credit` and is reported, not clamped. No card PAN/last4/fingerprint, cardholder name, receipt URLs, billing address, email, or phone.
+Sanitized payment fields: `id`, `order_id`, `location_id`, `status`, timestamps, `customer_id`, `source_type`, `amount_money`, `total_money`, `tip_money`, `refunded_money`, `approved_money`, signed `processing_fee[]` (`type`, `effective_at`, `amount_money`). Derived `processing_fee_amount` is the nonnegative **net** cost when `sum(signed amounts) ≥ 0`. Production INITIAL amounts are positive (merchant fee cost). A negative net is a fee credit: `processing_fee_invalid = net_credit`, `processing_fee_amount` left null, counted as “Net fee credits not representable”. No card PAN/last4/fingerprint, cardholder name, receipt URLs, billing address, email, or phone.
 
 Sanitized refund fields: `id`, `payment_id`, `order_id`, `location_id`, `status`, `amount_money`, timestamps. No reason text.
 
@@ -210,7 +210,7 @@ Prefer `order.net_amounts` (Orders API). All integers, minor units, plus ISO cur
 | `sale.subtotal_amount` | `total_amount - tax - service_charge + discount` (Square has no separate order subtotal) |
 | `payment.amount` | `amount_money` (excludes tip; not `total_money`) |
 | `payment.tip_amount` | `tip_money` |
-| `payment.processing_fee_amount` | `-sum(processing_fee[].amount_money.amount)` when that sum is ≤ 0. Square INITIAL fees are typically negative (money taken from the merchant); ADJUSTMENT entries can be positive reversals. Do **not** sum absolute values. A positive net signed sum is a net credit: reported as invalid, `processing_fee_amount` left null. |
+| `payment.processing_fee_amount` | `sum(processing_fee[].amount_money.amount)` when that sum is ≥ 0. Production INITIAL amounts are **positive** merchant fee cost. Negative ADJUSTMENT entries reduce the net. Do **not** abs or invert signs. A negative net is a fee credit: reported, `processing_fee_amount` left null. |
 | `refund.amount` | `amount_money` (positive) |
 
 If `net_amounts` is missing, the same fields on the order (`total_money`, `total_tip_money`, …) are used. Tip is never guessed. Processing fees never change `sale.total_amount`. Refunds never change `sale.total_amount`.

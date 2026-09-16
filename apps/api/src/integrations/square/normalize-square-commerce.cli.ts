@@ -37,7 +37,9 @@ async function main(): Promise<void> {
     console.log(`Unresolved catalog lines: ${result.unresolvedCatalogLines}`);
     console.log(`Unresolved payments: ${result.unresolvedPayments}`);
     console.log(`Unresolved refunds: ${result.unresolvedRefunds}`);
-    console.log(`Invalid processing fees: ${result.invalidProcessingFees}`);
+    console.log(
+      `Net fee credits not representable: ${result.invalidProcessingFees}`,
+    );
   } finally {
     await app.close();
   }
