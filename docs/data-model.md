@@ -1,6 +1,6 @@
 # Goat Barn proposed data model
 
-Architecture for the Goat Barn business model. The **operational core** is implemented in PostgreSQL (migration `0002_operational_core`; see `docs/schema.md`). Financial tables (`sale` and related), PERSON, and consent are still design-only. FareHarbor `integration_events` remains the webhook inbox.
+Architecture for the Goat Barn business model. The **operational core** is implemented in PostgreSQL (migrations `0002`–`0005`; see `docs/schema.md`). The **commerce core** is empty tables from `0006_commerce` (`sale`, `sale_line_item`, `payment`, `refund`, catalog). PERSON and consent are still design-only. FareHarbor `integration_events` remains the webhook inbox. No Square or FareHarbor money has been ingested.
 
 This proposal is based on:
 
@@ -76,7 +76,7 @@ It is sized for a seasonal agritourism business, not a master-data platform.
 
 Primary key for every new canonical table: `id uuid`. Our clocks: `created_at`, `updated_at`. Provider times stored when useful (`occurred_at`, `observed_at`).
 
-Money: integer **cents** + `currency` (`CAD` on Square; FareHarbor decimal strings converted at ingest).
+Money: integer **minor units** + ISO `currency` (`CAD` today; never assume every provider is CAD). CAD $12.34 = `1234`. Never float/double/decimal dollars on canonical money columns. Column names use `_amount` (not `_cents`) so the unit is “currency minor units”, not a CAD-only word.
 
 ### `source_identity`
 
@@ -223,7 +223,8 @@ FareHarbor operational booking.
 - `cancelled_at`; cancellation reason **prefer inbox** (may be PII)
 - `rebooked_from_booking_id` / `rebooked_to_booking_id`
 - `is_superseded` when rebooked onward
-- `sale_id` nullable — the experience SALE, once created
+
+There is **no** `sale_id` on `booking`. The experience sale is found via unique nullable `sale.booking_id`.
 
 **No `booking_status_history` in the initial schema.** Current status + timestamps + cancel/rebook FKs are enough. Full webhook payloads remain in `integration_events`. If a report later needs every status transition, materialize `booking_status_history` from the inbox.
 
@@ -294,46 +295,53 @@ Walk-ins: `booking_id` null is valid.
 
 Provider-neutral **commercial sale document**. This is what revenue accounting reads.
 
-- One FareHarbor booking **may** produce one `sale` (`kind=experience`).
-- One Square Order **may** produce one `sale` (`kind=retail`). Square Order **id** is a `source_identity` (`entity_type=order`), not this table’s name or PK.
+- One FareHarbor booking produces **at most one** `sale` (`kind=experience`, unique `booking_id`).
+- One Square Order produces **one** `sale` (`kind=retail`). Square Order **id** is a `source_identity` (`entity_type=order`), not this table’s name or PK.
+- FareHarbor has no provider “order” id. Do not invent one. Find the sale through `sale.booking_id`.
 
 **Fields**
 
 - `kind` — `experience` \| `retail`
-- `booking_id` nullable (experience sales)
-- `sold_at`, `status`
-- `subtotal_cents`, `discount_cents`, `tax_cents`, `total_cents`
-- `currency`
-- **Do not store `amount_paid` on sale.** That is cash, and it duplicates `payment`. Omitting it makes `sale.total + payment.amount` an explicit mistake rather than a tempting column.
+- `booking_id` unique nullable (required when `kind=experience`)
+- `experience_id` / `session_id` nullable
+- `source_type` nullable
+- `status`, `currency` (ISO 3-letter)
+- `subtotal_amount`, `discount_amount`, `tax_amount`, `service_charge_amount`, `total_amount` — integer minor units
+- `occurred_at`
+- **Do not store `amount_paid` on sale.** That is cash, and it duplicates `payment`.
 
-Tips: store on **`payment`** (Square `tip_money`). Do not add tips into `sale.total` unless finance later defines tax-in/tip-in document totals — default is merchandise/experience document **without** tip.
+Tips: store on **`payment.tip_amount`**. `sale.total_amount` **excludes** staff gratuity. Processing fees stay on `payment.processing_fee_amount` and are **not** subtracted from sale total.
 
 **Revenue vs cash (non-negotiable)**
 
 | Metric | Sum |
 | --- | --- |
-| Revenue / sales mix | `sale.total_cents` (or `subtotal` if we adopt tax-exclusive reporting) |
-| Cash collected | `payment.amount_cents` (and `payment.total_cents` if that includes tip) |
-| Cash returned | `refund.amount_cents` |
-| Net cash | payments − refunds |
+| Revenue / sales mix | `sale.total_amount` (or `subtotal_amount` if finance later adopts tax-exclusive reporting) |
+| Cash collected (ex-tip) | `payment.amount` |
+| Tips | `payment.tip_amount` |
+| Cash returned | `refund.amount` |
+| Net cash | payments − refunds (tips reported separately) |
+| Processing cost | `payment.processing_fee_amount` |
 
-Never: `SUM(sale.total) + SUM(payment.amount)`.  
+Never: `SUM(sale.total_amount) + SUM(payment.amount)`.  
 Never: Square Order money + Square Payment money as two revenue lines.  
 Never: FH `receipt_total` + FH `payments[].amount` as two revenue lines.
 
-**Source of truth:** FH receipt fields for experience; Square Order (`net_amounts` / `total_money` — pick one definition at ingest and document it on the row or in code comments) for retail.
+**Booking cardinality (FareHarbor Booking with Payments)**
 
-**PII:** no.
+The webhook exposes one receipt (`receipt_subtotal` / `receipt_taxes` / `receipt_total`), one `payments[]`, and one `refunds[]` per booking. Booking edits, cancellation, and refunds update **that** sale (status/amounts/payments/refunds), they do not insert a second sale. Rebooking creates a **new booking**, which may get a **new sale**; the superseded booking keeps its original sale. Unique `sale.booking_id` prevents duplicate experience revenue.
 
-Rebooking: old sale remains; new booking gets a new sale.
+**Source of truth:** FH receipt fields for experience; Square Order money **excluding tip** for retail (`net_amounts` components minus `tip_money`, documented at ingest).
+
+**PII:** no. No `person_id`.
 
 ---
 
 ### `sale_line_item`
 
-**Fields:** `sale_id`, `product_variation_id` nullable (retail; Square `catalog_object_id` is a variation in 3390/3392 lines), `experience_id` nullable, sold `name` / `variation_name`, `quantity` (may be fractional), `gross_cents`, `discount_cents`, `tax_cents`, `total_cents`.
+**Fields:** `sale_id`; `product_id` / `product_variation_id` / `experience_id` nullable; `description` snapshot; `quantity` `numeric(12,4)` (Square quantities are decimal strings; integer is not sufficient); `currency`; `gross_amount`, `discount_amount`, `tax_amount`, `total_amount`.
 
-Experience sales may have a single line. Do not copy Square line `note` (possible PII).
+Do not require a catalog mapping. Do not copy Square line `note` (possible PII). Preserve explicit provider discount amounts; do not infer discount only from subtotal−total arithmetic.
 
 **PII:** no (product names are business data).
 
@@ -343,21 +351,21 @@ Experience sales may have a single line. Do not copy Square line `note` (possibl
 
 Cash movement / tender. **Not revenue.**
 
-**Fields:** `sale_id`, `amount_cents`, `tip_cents`, `total_cents`, `processing_fee_cents`, `method` (`card` \| `cash` \| `external` \| `unknown`), `status`, `paid_at`.
+**Fields:** `sale_id` (required), `amount` (excludes tip), `tip_amount` (default 0), `processing_fee_amount` nullable, `method`, `status`, `paid_at`, `currency`.
 
-Square `customer.id` on a payment → `source_identity` (often **unresolved**). Do not create PERSON.
+Square `customer.id` on a payment → `source_identity` (often **unresolved**). Do not create PERSON. No `person_id` on `payment`.
 
 **Source of truth:** Square Payments API; FH `payments[]`.
 
-**PII:** no if card details, last4, fingerprints, receipt URLs are omitted (they exist on Square; strip at ingest even in snapshots if possible).
+**PII:** no if card details, last4, fingerprints, receipt URLs are omitted.
 
 ---
 
 ### `refund`
 
-Reversal of a **payment** (and therefore of cash against a sale).
+Reversal of payment/sale cash. Positive minor units. **Not** a negative payment.
 
-**Fields:** `payment_id`, `sale_id`, `amount_cents`, `status`, `refunded_at`. No free-text reason.
+**Fields:** `payment_id` and/or `sale_id` (at least one required), `amount`, `status`, `refunded_at`, `currency`. No free-text reason.
 
 **Evidence:** Square 3/30 days, all with payment_id and order_id.
 
@@ -365,11 +373,11 @@ Reversal of a **payment** (and therefore of cash against a sale).
 
 ---
 
-### `product_category` / `product` / `product_variation`
+### `product_category` / `product` / `product_variation` / `product_category_assignment`
 
-Square Catalog. `product.is_archived` for the 159/342 archived items — still resolvable historically. SKU on variation (87.3%). Category names as observed (Cheese, Ice Cream, Alpaca Merchandise, Event*, `UR Experiences`, …).
+Square Catalog and later other catalogs. `status` archives in place — still resolvable historically. SKU on variation, indexed, **not** unique (audit: many variations have none). Category/product/variation provider ids via `source_identity`. `catalog_version` is not our PK.
 
-Square catalog object ids via `source_identity`. `catalog_version` is not our PK.
+A product may belong to **multiple** categories. Membership is `product_category_assignment` (`product_id`, `category_id`, `created_at`) with composite primary key `(product_id, category_id)`. There is no `product.category_id` and no invented primary category. Square `category` ids resolve to `product_category`; item–category links later populate the assignment table.
 
 **PII:** no.
 
@@ -402,7 +410,8 @@ erDiagram
   PAYMENT ||--o{ REFUND : reversed
   SALE ||--o{ REFUND : reversed
 
-  PRODUCT_CATEGORY ||--o{ PRODUCT : groups
+  PRODUCT_CATEGORY ||--o{ PRODUCT_CATEGORY_ASSIGNMENT : includes
+  PRODUCT ||--o{ PRODUCT_CATEGORY_ASSIGNMENT : assigned
   PRODUCT ||--o{ PRODUCT_VARIATION : varies
   PRODUCT_VARIATION ||--o{ SALE_LINE_ITEM : sold_on
 
@@ -411,6 +420,9 @@ erDiagram
   SOURCE_IDENTITY }o--o| VISIT : may_resolve
   SOURCE_IDENTITY }o--o| SALE : may_resolve
   SOURCE_IDENTITY }o--o| PAYMENT : may_resolve
+  SOURCE_IDENTITY }o--o| REFUND : may_resolve
+  SOURCE_IDENTITY }o--o| PRODUCT_CATEGORY : may_resolve
+  SOURCE_IDENTITY }o--o| PRODUCT : may_resolve
   SOURCE_IDENTITY }o--o| PRODUCT_VARIATION : may_resolve
 ```
 
@@ -467,10 +479,10 @@ Two streams: **experience `sale`** (FareHarbor) and **retail `sale`** (Square Or
 | Gross / net sales | `sale` amounts only |
 | Mix by product/experience | `sale_line_item` |
 | Tenders | `payment.method` |
-| Tips | `payment.tip_cents` (not farm merchandise unless finance says so) |
-| Processing fees | `payment.processing_fee_cents` (cost) |
-| Tax collected | `sale.tax_cents` (liability) |
-| Discounts | `sale.discount_cents` / lines |
+| Tips | `payment.tip_amount` (not farm merchandise unless finance says so) |
+| Processing fees | `payment.processing_fee_amount` (cost) |
+| Tax collected | `sale.tax_amount` (liability) |
+| Discounts | `sale.discount_amount` / line `discount_amount` (provider values, not inferred) |
 | Total Udderly sales | experience sales + retail sales (same `sale` definition) |
 
 Exclude superseded/cancelled experience sales from “current revenue” as finance defines. Old rows remain.
@@ -521,11 +533,11 @@ Normalized tables omit DOB, signatures, IP, cards, receipt URLs on purpose. Snap
 
 **Do not block Phase 1 schema shape:** Square EXTERNAL mix, Instant Profile policy, nested vs cropped guest ops, Event/UR Experiences vs FH, MOBILE location, affiliate table vs columns.
 
-**Should be decided before first money ingest (can ship schema with a documented default):**
+**Should be decided before first money ingest (defaults documented on the schema):**
 
-1. Experience `sale.total` = FH `receipt_total` (tax-in) vs `receipt_subtotal` (tax-exclusive)?
-2. Retail `sale.total` = Square `total_money` vs `net_amounts.total_money`?
-3. Are Square tips included in retail `sale.total` or payment-only?
+1. Experience `sale.total_amount` = FH `receipt_total` (tax-in). Default: tax-in document total.
+2. Retail `sale.total_amount` = Square order merchandise/tax/service/discount **excluding** `tip_money`. Prefer `net_amounts` components minus tip when present.
+3. Square tips are **payment-only** (`payment.tip_amount`). Not sale revenue.
 4. Cancellation reason on `booking` vs inbox-only?
 
 **Should be decided before PERSON / consent_event:**
@@ -566,6 +578,12 @@ The first business-data migration created the **operational core only** (`0002_o
 | `visit` | WW attendance facts |
 | `source_snapshot` | Sanitized Wherewolf pull copies |
 | `source_object_classification` | Explicit FH report labels that are not experiences |
+| `sale` | Commercial/revenue document |
+| `sale_line_item` | Sold lines |
+| `payment` | Cash movement |
+| `refund` | Reversal |
+| `product_category` / `product` / `product_variation` | Catalog |
+| `product_category_assignment` | Many-to-many product ↔ category |
 
 `experience_source_mapping` is retained: it is the assignment of a provider catalog object to an `experience` with a PostgreSQL FK. `source_identity` is the id registry and may be unresolved; it cannot FK to `experience`. Do not also store FareHarbor item / Wherewolf activity mappings only in `source_identity`.
 
@@ -575,17 +593,14 @@ Keep using existing `integration_events`.
 
 | Table / feature | Why later |
 | --- | --- |
-| `sale`, `sale_line_item`, `payment`, `refund` | Financial core |
-| `product_category`, `product`, `product_variation` | Square catalog |
 | `person`, `person_contact_point` | Matching |
 | `consent_event` | Consent ledger (last-seen flags already on visit/contact) |
 | `booking_status_history` | Inbox already has webhook history |
-| `source_snapshot` | Pull-API copies |
 | Canonical `order` | Not in the model |
 
 ### Explicitly not this migration
 
-Ingestion, FareHarbor/Wherewolf/Square normalization workers, identity matching, dashboards, PERSON creation.
+Square/FareHarbor financial ingest, identity matching, dashboards, PERSON creation. Commerce tables are created empty.
 
 ---
 

@@ -43,6 +43,13 @@
       "when": 1789502000000,
       "tag": "0005_source_object_classification",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789503000000,
+      "tag": "0006_commerce",
+      "breakpoints": true
     }
   ]
 }

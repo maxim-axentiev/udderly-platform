@@ -1,6 +1,6 @@
 # Operational schema (Phase 1)
 
-PostgreSQL tables from migrations `apps/api/drizzle/0002_operational_core.sql`, `0003_booking_party_member_lifecycle.sql`, `0004_source_snapshot.sql`, and `0005_source_object_classification.sql`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored; they are read from disk and discarded. Operational booking/visit tables stay empty until the matching import/normalize command. Design: `docs/data-model.md`.
+PostgreSQL tables from migrations `0002_operational_core` through `0006_commerce`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Commerce tables (`sale`, `payment`, `refund`, catalog) are **empty** until a later ingest; this migration creates schema only. Design: `docs/data-model.md`.
 
 ## Tables
 
@@ -16,8 +16,57 @@ PostgreSQL tables from migrations `apps/api/drizzle/0002_operational_core.sql`, 
 | `visit` | Actual attendance (PII geography/demographics) |
 | `source_snapshot` | Sanitized pull-API copies (Wherewolf) |
 | `source_object_classification` | Explicit non-experience provider objects (FH report labels) |
+| `sale` | Commercial/revenue document |
+| `sale_line_item` | What was sold |
+| `payment` | Money received (not revenue) |
+| `refund` | Reversal (positive amount, not a negative payment) |
+| `product_category` | Canonical catalog category |
+| `product` | Canonical catalog item (archive in place) |
+| `product_variation` | Sellable variation / SKU holder |
+| `product_category_assignment` | Many-to-many product ↔ category |
 
-Plus existing `platform_meta`, `integration_events`, and `source_snapshot`.
+Plus existing `platform_meta` and `integration_events`.
+
+## Money
+
+All canonical monetary columns are **integer minor units** plus a 3-letter `currency` code (`CAD` today; never assume CAD forever). Example: CAD $12.34 = `1234`. Never float/double/decimal dollars.
+
+`sale.total_amount` is the sale value. **Do not** `SUM(sale.total_amount) + SUM(payment.amount)` for revenue. Payment is cash movement; refund is reversal.
+
+Tips: `payment.tip_amount` only. Processing fees: `payment.processing_fee_amount` only. Neither is subtracted from or added into `sale.total_amount`.
+
+## `sale`
+
+Revenue document. Not a provider “order”.
+
+- `kind`: `experience` (FareHarbor) or `retail` (Square)
+- `booking_id` unique nullable. Experience sales **must** have a booking (`sale_experience_has_booking`). Retail sales leave it null. At most one sale per booking.
+- `experience_id` / `session_id` nullable (copied from the booking when known)
+- `source_type` nullable channel
+- Amounts: `subtotal_amount`, `discount_amount`, `tax_amount`, `service_charge_amount`, `total_amount`
+- `occurred_at` is the business time of the sale (not `created_at`)
+- No `amount_paid` column (that would duplicate `payment`)
+- No `person_id`
+
+Provider ids: Square `order.id` → `source_identity` (`square` / `order` / `<id>` → `sale`). FareHarbor has **no** order id; the sale is found via `sale.booking_id` (and later `fareharbor` / `payment` / `<pk>` on payments).
+
+Later mapping (not implemented): FH `receipt_subtotal` / `receipt_taxes` / `receipt_total`; Square order components with **canonical total excluding tip**.
+
+## `sale_line_item`
+
+`sale_id` required. `product_id` / `product_variation_id` / `experience_id` nullable (unmapped historical lines are allowed). `description` is a safe name snapshot. `quantity` is `numeric(12,4)` because Square quantities are decimal strings, not guaranteed integers.
+
+Line amounts: `gross_amount` (before discount), `discount_amount`, `tax_amount`, `total_amount`, plus `currency`.
+
+## `payment` / `refund`
+
+`payment.sale_id` is required. `amount` is cash applied to the sale **excluding** tip. `tip_amount` defaults to 0. `processing_fee_amount` nullable. No card PAN/last4/fingerprints/receipt URLs.
+
+`refund` amounts are positive integer minor units with an explicit 3-letter `currency` on the refund row (not inferred from payment/sale). Either `sale_id` or `payment_id` (or both) must be set. Not modeled as negative payments.
+
+## Catalog
+
+`product_category` / `product` / `product_variation` / `product_category_assignment`. A product may belong to **many** categories (Square items can). There is no `product.category_id` and no primary category. Assignment FKs are `ON DELETE RESTRICT`. Composite primary key `(product_id, category_id)`; extra index on `category_id`. `status` archives in place (`active` / `archived`). SKU on variation, indexed, **not** unique. Provider catalog ids stay in `source_identity` (`category`, `item`, `item_variation`). Square item category membership later fills `product_category_assignment`.
 
 ## `source_snapshot`
 
@@ -31,9 +80,24 @@ Wherewolf payloads are sanitized before insert (no DOB, signatures, IP, street, 
 
 Unique `(provider, entity_type, external_id)`.
 
-`internal_entity_type` and `internal_entity_id` are **nullable together** (check `source_identity_internal_pair`). They are polymorphic: PostgreSQL does **not** foreign-key them to `booking` / `visit` / `experience`. Application code must keep them consistent when set.
+`internal_entity_type` and `internal_entity_id` are **nullable together** (check `source_identity_internal_pair`). They are polymorphic: PostgreSQL does **not** foreign-key them to `booking` / `visit` / `experience` / `sale`. Application code must keep them consistent when set.
 
 Example unresolved: `square` / `customer` / `<id>` with both internal columns null.
+
+Intended commerce identities (when ingest exists):
+
+| Provider | `entity_type` | Resolves to |
+| --- | --- | --- |
+| square | `order` | `sale` |
+| square | `payment` | `payment` |
+| square | `refund` | `refund` |
+| square | `category` | `product_category` |
+| square | `item` | `product` |
+| square | `item_variation` | `product_variation` |
+| fareharbor | `payment` | `payment` |
+| fareharbor | `refund` | `refund` |
+
+Do **not** invent a FareHarbor order identity.
 
 ## `experience_source_mapping` vs `source_identity`
 
@@ -80,7 +144,7 @@ Rows use `provider = wherewolf`, `provider_object_type = activity`, `external_id
 
 ## Foreign keys
 
-All business FKs use **`ON DELETE RESTRICT`** so archiving/deleting an experience cannot silently drop bookings or visits.
+All business FKs use **`ON DELETE RESTRICT`** so archiving/deleting an experience, product, or sale cannot silently drop history.
 
 `booking.rebooked_from_booking_id` / `rebooked_to_booking_id` reference `booking`.
 
@@ -90,15 +154,15 @@ Removed participants keep their row: `is_active = false`, `removed_at` set, `las
 
 ## No FareHarbor UUID on `booking`
 
-Idempotency is `source_identity` (`fareharbor` / `booking` / uuid). Raw payloads stay in `integration_events`.
+Idempotency is `source_identity` (`fareharbor` / `booking` / uuid). Raw payloads stay in `integration_events`. There is no `booking.sale_id`; look up the sale by unique `sale.booking_id`.
 
 ## PII
 
 - `booking_contact`: `name`, `email`, `phone`, marketing opt-in flags
 - `visit`: `city`, `postal`, `age_at_visit`, `age_band`, `is_minor`, `referral_source`, `marketing_opt_in`, `group_type`
 
-Not stored: DOB, signatures, waiver blobs, IP, street address, full postal/ZIP from Wherewolf, card data, payment amounts.
+Not stored: DOB, signatures, waiver blobs, IP, street address, full postal/ZIP from Wherewolf, card data, last4, fingerprints, receipt URLs, refund reason text. Square `customer.id` stays unresolved in `source_identity` if ingested later; commerce tables have no `person_id`.
 
 ## Not in this migration
 
-`person`, `sale`, payments, products, ingest jobs.
+`person`, ingest jobs, Square/FareHarbor financial normalization, dashboards.
