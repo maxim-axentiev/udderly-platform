@@ -10,13 +10,11 @@ import { squarePaymentMethod } from "./square.commerce.status";
 
 test("sale total excludes explicit Square tip once", () => {
   const money = squareOrderSaleMoney({
-    net_amounts: {
-      total_money: { amount: 1100, currency: "CAD" },
-      tax_money: { amount: 50, currency: "CAD" },
-      discount_money: { amount: 100, currency: "CAD" },
-      tip_money: { amount: 100, currency: "CAD" },
-      service_charge_money: { amount: 25, currency: "CAD" },
-    },
+    total_money: { amount: 1100, currency: "CAD" },
+    total_tax_money: { amount: 50, currency: "CAD" },
+    total_discount_money: { amount: 100, currency: "CAD" },
+    total_tip_money: { amount: 100, currency: "CAD" },
+    total_service_charge_money: { amount: 25, currency: "CAD" },
   });
   assert.equal(money?.currency, "CAD");
   assert.equal(money?.totalAmount, 1000);
@@ -27,6 +25,24 @@ test("sale total excludes explicit Square tip once", () => {
   assert.equal(money?.subtotalAmount, 1025);
 });
 
+test("net_amounts after a return do not reduce canonical sale fields", () => {
+  const money = squareOrderSaleMoney({
+    total_money: { amount: 10500, currency: "CAD" },
+    total_tax_money: { amount: 1300, currency: "CAD" },
+    total_discount_money: { amount: 0, currency: "CAD" },
+    total_tip_money: { amount: 500, currency: "CAD" },
+    total_service_charge_money: { amount: 0, currency: "CAD" },
+    net_amounts: {
+      total_money: { amount: 8000, currency: "CAD" },
+      tax_money: { amount: 1000, currency: "CAD" },
+      tip_money: { amount: 500, currency: "CAD" },
+    },
+  });
+  assert.equal(money?.totalAmount, 10000);
+  assert.equal(money?.taxAmount, 1300);
+  assert.equal(money?.tipAmount, 500);
+});
+
 test("sanitizes order without customer contact or notes", () => {
   const sanitized = sanitizeSquareOrder({
     id: "O1",
@@ -35,6 +51,8 @@ test("sanitizes order without customer contact or notes", () => {
     created_at: "2026-09-15T12:00:00Z",
     customer_id: "C1",
     note: "do not persist",
+    total_money: { amount: 500, currency: "CAD" },
+    total_tip_money: { amount: 0, currency: "CAD" },
     net_amounts: {
       total_money: { amount: 500, currency: "CAD" },
       tip_money: { amount: 0, currency: "CAD" },

@@ -41,12 +41,15 @@ const ORDER_CLOSED_TOMORROW = "SYN-SQ-COM-ORDER-CLOSED-TOMORROW";
 const ORDER_BOUND_IN = "SYN-SQ-COM-ORDER-BOUND-IN";
 const ORDER_BOUND_OUT = "SYN-SQ-COM-ORDER-BOUND-OUT";
 const ORDER_NOUID = "SYN-SQ-COM-ORDER-NOUID";
+const ORDER_GROSS = "SYN-SQ-COM-ORDER-GROSS";
 const PAY_CASH = "SYN-SQ-COM-PAY-CASH";
 const PAY_CARD = "SYN-SQ-COM-PAY-CARD";
 const PAY_EXT = "SYN-SQ-COM-PAY-EXT";
 const PAY_ORPHAN = "SYN-SQ-COM-PAY-ORPHAN";
 const PAY_TIP = "SYN-SQ-COM-PAY-TIP";
 const PAY_CREDIT = "SYN-SQ-COM-PAY-CREDIT";
+const PAY_GROSS = "SYN-SQ-COM-PAY-GROSS";
+const REF_GROSS = "SYN-SQ-COM-REF-GROSS";
 const REF_A = "SYN-SQ-COM-REF-A";
 const CUST = "SYN-SQ-COM-CUST";
 const VAR = "SYN-SQ-COM-VAR";
@@ -64,12 +67,15 @@ const ALL_EXTERNAL_IDS = [
   ORDER_BOUND_IN,
   ORDER_BOUND_OUT,
   ORDER_NOUID,
+  ORDER_GROSS,
   PAY_CASH,
   PAY_CARD,
   PAY_EXT,
   PAY_ORPHAN,
   PAY_TIP,
   PAY_CREDIT,
+  PAY_GROSS,
+  REF_GROSS,
   REF_A,
   CUST,
   VAR,
@@ -182,6 +188,14 @@ async function main(): Promise<void> {
             line(undefined, { name: "Beta", quantity: "1", gross: 40, total: 40 }),
           ],
         }),
+        order(ORDER_GROSS, {
+          total: 10500,
+          tax: 1300,
+          tip: 500,
+          netTotal: 8000,
+          netTax: 1000,
+          netTip: 500,
+        }),
       ],
       payments: [
         payment(PAY_CASH, ORDER_A, {
@@ -214,15 +228,21 @@ async function main(): Promise<void> {
             { type: "ADJUSTMENT", amount: -400 },
           ],
         }),
+        payment(PAY_GROSS, ORDER_GROSS, {
+          amount: 10000,
+          tip: 500,
+          method: "CARD",
+        }),
       ],
       refunds: [
         refund(REF_A, PAY_CASH, ORDER_A, 200),
+        refund(REF_GROSS, PAY_GROSS, ORDER_GROSS, 2000),
       ],
     });
-    if (first.ordersFetched !== 11 || first.paymentsFetched !== 6) {
+    if (first.ordersFetched !== 12 || first.paymentsFetched !== 7) {
       throw new Error("expected synthetic commerce fetch counts");
     }
-    if (first.refundsFetched !== 1 || first.snapshotsInserted < 1) {
+    if (first.refundsFetched !== 2 || first.snapshotsInserted < 1) {
       throw new Error("expected refund snapshot");
     }
 
@@ -410,6 +430,19 @@ async function main(): Promise<void> {
     }
     console.log("- refund resolves payment + sale with a positive amount");
 
+    const grossSale = await loadSale(database, ORDER_GROSS);
+    if (grossSale.totalAmount !== 10000 || grossSale.taxAmount !== 1300) {
+      throw new Error("net_amounts after a return must not reduce original sale totals");
+    }
+    const grossRefund = await loadRefund(database, REF_GROSS);
+    if (grossRefund.amount !== 2000 || grossRefund.saleId !== grossSale.id) {
+      throw new Error("return must be a separate refund on the original sale");
+    }
+    if (grossSale.totalAmount - grossRefund.amount !== 8000) {
+      throw new Error("sale minus refund must equal provider net result");
+    }
+    console.log("- original sale totals stay gross; refunds are separate");
+
     const customer = await database.db
       .select({
         internalEntityType: sourceIdentities.internalEntityType,
@@ -546,8 +579,9 @@ async function main(): Promise<void> {
       ORDER_CLOSED_TODAY,
       ORDER_BOUND_IN,
       ORDER_NOUID,
+      ORDER_GROSS,
     ]);
-    if (saleCount !== 9) {
+    if (saleCount !== 10) {
       throw new Error("idempotent normalize created extra sales");
     }
     console.log("- repeated normalize does not duplicate commerce rows");
@@ -606,9 +640,17 @@ function order(
     createdAt?: string;
     closedAt?: string;
     lines?: Record<string, unknown>[];
+    netTotal?: number;
+    netTax?: number;
+    netDiscount?: number;
+    netTip?: number;
+    netServiceCharge?: number;
   },
 ): Record<string, unknown> {
   const tip = options.tip ?? 0;
+  const tax = options.tax ?? 0;
+  const discount = options.discount ?? 0;
+  const serviceCharge = options.serviceCharge ?? 0;
   return {
     id,
     location_id: "L1",
@@ -619,12 +661,17 @@ function order(
     customer_id: options.customerId,
     version: options.version ?? 1,
     source: options.source ? { name: options.source } : undefined,
+    total_money: money(options.total),
+    total_tax_money: money(tax),
+    total_discount_money: money(discount),
+    total_tip_money: money(tip),
+    total_service_charge_money: money(serviceCharge),
     net_amounts: {
-      total_money: money(options.total),
-      tax_money: money(options.tax ?? 0),
-      discount_money: money(options.discount ?? 0),
-      tip_money: money(tip),
-      service_charge_money: money(options.serviceCharge ?? 0),
+      total_money: money(options.netTotal ?? options.total),
+      tax_money: money(options.netTax ?? tax),
+      discount_money: money(options.netDiscount ?? discount),
+      tip_money: money(options.netTip ?? tip),
+      service_charge_money: money(options.netServiceCharge ?? serviceCharge),
     },
     line_items: options.lines,
   };

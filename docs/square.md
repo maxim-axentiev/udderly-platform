@@ -178,7 +178,7 @@ Payments and refunds are still selected by their own ListPayments/ListRefunds `b
 
 `provider = square`. `entity_type` is `order`, `payment`, or `refund`. `external_id` is the Square id. Identical sanitized JSON reuses `(provider, entity_type, external_id, payload_hash)`.
 
-Sanitized order fields: `id`, `location_id`, `state`, `created_at`, `updated_at`, `closed_at`, `version`, `customer_id` (unresolved evidence only), `source.name`/`type`, `net_amounts` money parts, top-level total money fallbacks, `line_items` (uid, catalog ids/version, names, quantity, money parts, modifier name/price only), `tenders` (`id`, `type`, `payment_id` only). No notes, fulfillments, or customer contact.
+Sanitized order fields: `id`, `location_id`, `state`, `created_at`, `updated_at`, `closed_at`, `version`, `customer_id` (unresolved evidence only), `source.name`/`type`, top-level original money (`total_money`, `total_tax_money`, `total_discount_money`, `total_tip_money`, `total_service_charge_money`), `net_amounts` as post-return evidence only, `line_items` (uid, catalog ids/version, names, quantity, money parts, modifier name/price only), `tenders` (`id`, `type`, `payment_id` only). No notes, fulfillments, or customer contact.
 
 Sanitized payment fields: `id`, `order_id`, `location_id`, `status`, timestamps, `customer_id`, `source_type`, `amount_money`, `total_money`, `tip_money`, `refunded_money`, `approved_money`, signed `processing_fee[]` (`type`, `effective_at`, `amount_money`). Derived `processing_fee_amount` is the nonnegative **net** cost when `sum(signed amounts) ≥ 0`. Production INITIAL amounts are positive (merchant fee cost). A negative net is a fee credit: `processing_fee_invalid = net_credit`, `processing_fee_amount` left null, counted as “Net fee credits not representable”. No card PAN/last4/fingerprint, cardholder name, receipt URLs, billing address, email, or phone.
 
@@ -199,21 +199,29 @@ A Square order may create a sale with **zero** line items. Do not invent a fake 
 
 ### Money
 
-Prefer `order.net_amounts` (Orders API). All integers, minor units, plus ISO currency.
+Canonical Square **sale** fields are original/gross order economics from **top-level** Order money, excluding tip. All integers, minor units, plus ISO currency.
 
 | Canonical | Square |
 | --- | --- |
-| `sale.discount_amount` | `net_amounts.discount_money` |
-| `sale.tax_amount` | `net_amounts.tax_money` |
-| `sale.service_charge_amount` | `net_amounts.service_charge_money` |
-| `sale.total_amount` | `net_amounts.total_money` **minus** explicit `net_amounts.tip_money` once |
+| `sale.discount_amount` | `total_discount_money` |
+| `sale.tax_amount` | `total_tax_money` |
+| `sale.service_charge_amount` | `total_service_charge_money` |
+| `sale.total_amount` | `total_money` **minus** explicit `total_tip_money` once |
 | `sale.subtotal_amount` | `total_amount - tax - service_charge + discount` (Square has no separate order subtotal) |
 | `payment.amount` | `amount_money` (excludes tip; not `total_money`) |
 | `payment.tip_amount` | `tip_money` |
 | `payment.processing_fee_amount` | `sum(processing_fee[].amount_money.amount)` when that sum is ≥ 0. Production INITIAL amounts are **positive** merchant fee cost. Negative ADJUSTMENT entries reduce the net. Do **not** abs or invert signs. A negative net is a fee credit: reported, `processing_fee_amount` left null. |
 | `refund.amount` | `amount_money` (positive) |
 
-If `net_amounts` is missing, the same fields on the order (`total_money`, `total_tip_money`, …) are used. Tip is never guessed. Processing fees never change `sale.total_amount`. Refunds never change `sale.total_amount`.
+`net_amounts` is post-return/net provider evidence. It is stored on the snapshot but **must not** set canonical sale fields. Using `net_amounts` as the sale total plus recording refunds would count returns twice.
+
+Reporting:
+
+- gross sales = `sale.total_amount`
+- refunds = `refund.amount`
+- net sales = gross sales − refunds
+
+Tip is never guessed and never sale revenue (`payment.tip_amount` only). Processing fees never change `sale.total_amount`. Refunds never change `sale.total_amount`.
 
 ### Order status
 

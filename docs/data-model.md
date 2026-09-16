@@ -331,7 +331,7 @@ Never: FH `receipt_total` + FH `payments[].amount` as two revenue lines.
 
 The webhook exposes one receipt (`receipt_subtotal` / `receipt_taxes` / `receipt_total`), one `payments[]`, and one `refunds[]` per booking. Booking edits, cancellation, and refunds update **that** sale (status/amounts/payments/refunds), they do not insert a second sale. Rebooking creates a **new booking**, which may get a **new sale**; the superseded booking keeps its original sale. Unique `sale.booking_id` prevents duplicate experience revenue.
 
-**Source of truth:** FH receipt fields for experience; Square Order money **excluding tip** for retail (`net_amounts` components minus `tip_money`, documented at ingest).
+**Source of truth:** FH receipt fields for experience; Square **top-level** order totals **excluding** `total_tip_money` for retail. `net_amounts` is post-return evidence, not the canonical sale. Refunds are separate rows.
 
 **PII:** no. No `person_id`.
 
@@ -536,7 +536,7 @@ Normalized tables omit DOB, signatures, IP, cards, receipt URLs on purpose. Snap
 **Should be decided before first money ingest (defaults documented on the schema):**
 
 1. Experience `sale.total_amount` = FH `receipt_total` (tax-in). Default: tax-in document total.
-2. Retail `sale.total_amount` = Square order merchandise/tax/service/discount **excluding** `tip_money`. Prefer `net_amounts` components minus tip when present.
+2. Retail `sale.total_amount` = Square **top-level** `total_money` minus explicit `total_tip_money`. Do **not** use `net_amounts` (post-return). Refunds are separate; net sales = sale totals − refund totals.
 3. Square tips are **payment-only** (`payment.tip_amount`). Not sale revenue.
 4. Cancellation reason on `booking` vs inbox-only?
 

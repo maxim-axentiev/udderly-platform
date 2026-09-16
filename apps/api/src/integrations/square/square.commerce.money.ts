@@ -14,49 +14,39 @@ export type SquareSaleMoney = {
 };
 
 /**
- * Square order-level money → canonical sale.
+ * Square order-level money → canonical sale (original/gross economics).
  *
- * Prefer `net_amounts` (Orders API). Fall back to top-level `total_*` fields.
+ * Use top-level Order totals, not `net_amounts`.
+ * `net_amounts` is post-return provider evidence and must not reduce sale
+ * fields; refunds are stored separately. Using net sale totals plus refunds
+ * would double-count returns in reporting.
  *
- * `net_amounts.total_money` includes tip when `tip_money` is present.
+ * `order.total_money` includes tip when `total_tip_money` is present.
  * Canonical `sale.total_amount` excludes tip by subtracting that explicit
- * `tip_money` once. Never guess a tip. Never subtract processing fees.
+ * top-level tip once. Never guess a tip. Never subtract processing fees
+ * or refunds from the sale.
  *
- * Components (all integer minor units, never negative):
- * - discount_amount = net_amounts.discount_money
- * - tax_amount = net_amounts.tax_money
- * - service_charge_amount = net_amounts.service_charge_money
- * - total_amount = total_money - tip_money
+ * Components (integer minor units, never negative):
+ * - discount_amount = total_discount_money
+ * - tax_amount = total_tax_money
+ * - service_charge_amount = total_service_charge_money
+ * - total_amount = total_money - total_tip_money
  * - subtotal_amount = total_amount - tax - service_charge + discount
- *   (reconstruction from those explicit net_amounts fields; Square has no
- *   separate order subtotal)
  */
 export function squareOrderSaleMoney(
   order: Record<string, unknown>,
 ): SquareSaleMoney | undefined {
-  const net = nestedObject(order.net_amounts);
-  const discount = nonNegative(
-    moneyAmount(net?.discount_money) ?? moneyAmount(order.total_discount_money),
-  );
-  const tax = nonNegative(
-    moneyAmount(net?.tax_money) ?? moneyAmount(order.total_tax_money),
-  );
-  const serviceCharge = nonNegative(
-    moneyAmount(net?.service_charge_money) ??
-      moneyAmount(order.total_service_charge_money),
-  );
-  const tip = nonNegative(
-    moneyAmount(net?.tip_money) ?? moneyAmount(order.total_tip_money),
-  );
-  const totalWithTip = moneyAmount(net?.total_money) ?? moneyAmount(order.total_money);
+  const discount = nonNegative(moneyAmount(order.total_discount_money));
+  const tax = nonNegative(moneyAmount(order.total_tax_money));
+  const serviceCharge = nonNegative(moneyAmount(order.total_service_charge_money));
+  const tip = nonNegative(moneyAmount(order.total_tip_money));
+  const totalWithTip = moneyAmount(order.total_money);
   if (totalWithTip === undefined) {
     return undefined;
   }
 
   const currency =
-    moneyCurrency(net?.total_money) ??
-    moneyCurrency(order.total_money) ??
-    moneyCurrency(net?.tax_money);
+    moneyCurrency(order.total_money) ?? moneyCurrency(order.total_tax_money);
   if (!currency || currency.length !== 3) {
     return undefined;
   }
