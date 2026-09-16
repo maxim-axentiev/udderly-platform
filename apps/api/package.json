@@ -37,7 +37,12 @@
     "inspect:wherewolf:dev": "tsx src/integrations/wherewolf/inspect-wherewolf.cli.ts",
     "resanitize:wherewolf": "node dist/integrations/wherewolf/resanitize-wherewolf.cli.js",
     "resanitize:wherewolf:dev": "tsx src/integrations/wherewolf/resanitize-wherewolf.cli.ts",
-    "test:wherewolf-import": "tsx --test src/integrations/wherewolf/wherewolf.sanitize.spec.ts src/integrations/wherewolf/wherewolf.range.spec.ts src/integrations/wherewolf/wherewolf.occurrence.spec.ts src/integrations/wherewolf/wherewolf.activity.spec.ts src/integrations/wherewolf/wherewolf-inspect.spec.ts && tsx src/integrations/wherewolf/test-wherewolf-import.cli.ts"
+    "test:wherewolf-import": "tsx --test src/integrations/wherewolf/wherewolf.sanitize.spec.ts src/integrations/wherewolf/wherewolf.range.spec.ts src/integrations/wherewolf/wherewolf.occurrence.spec.ts src/integrations/wherewolf/wherewolf.activity.spec.ts src/integrations/wherewolf/wherewolf-inspect.spec.ts && tsx src/integrations/wherewolf/test-wherewolf-import.cli.ts",
+    "import:square-catalog": "node dist/integrations/square/import-square-catalog.cli.js",
+    "import:square-catalog:dev": "tsx src/integrations/square/import-square-catalog.cli.ts",
+    "normalize:square-catalog": "node dist/integrations/square/normalize-square-catalog.cli.js",
+    "normalize:square-catalog:dev": "tsx src/integrations/square/normalize-square-catalog.cli.ts",
+    "test:square-catalog": "tsx --test src/integrations/square/square.catalog.sanitize.spec.ts src/integrations/square/square.client.catalog.spec.ts && tsx src/integrations/square/test-square-catalog.cli.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

@@ -14,6 +14,24 @@ export const SQUARE_AUDIT_WINDOW_DAYS = 30;
 export const SQUARE_HISTORICAL_WINDOW_DAYS = 7;
 export const SQUARE_HISTORICAL_OFFSETS_DAYS = [400, 1100] as const;
 
+export const SQUARE_PROVIDER = "square";
+export const SQUARE_CATEGORY_ENTITY = "category";
+export const SQUARE_ITEM_ENTITY = "item";
+export const SQUARE_ITEM_VARIATION_ENTITY = "item_variation";
+export const SQUARE_CATALOG_TYPES = [
+  "CATEGORY",
+  "ITEM",
+  "ITEM_VARIATION",
+] as const;
+
+export const INTERNAL_PRODUCT_CATEGORY = "product_category";
+export const INTERNAL_PRODUCT = "product";
+export const INTERNAL_PRODUCT_VARIATION = "product_variation";
+
+export const SQUARE_STATUS_ACTIVE = "active";
+export const SQUARE_STATUS_ARCHIVED = "archived";
+export const SQUARE_STATUS_DELETED = "deleted";
+
 export const SQUARE_SENSITIVE_NEST_KEYS = new Set([
   "address",
   "bank_account_details",

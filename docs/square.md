@@ -1,6 +1,6 @@
 # Square integration
 
-Read-only production connection and data audit only. Square is intended as the future source for physical farm-store transactions and retail activity. This repository does **not** permanently ingest Square orders, payments, customers, or catalog rows yet.
+Read-only production connection and data audit only. Square is intended as the future source for physical farm-store transactions and retail activity. This repository does **not** ingest Square orders, payments, customers, refunds, or sales yet. Catalog import/normalize is manual.
 
 There is no Square webhook receiver and no recurring sync job.
 
@@ -93,10 +93,68 @@ No audit files are written. Do not save raw Square responses into the repo. If t
 
 ## Pagination
 
-List/search endpoints return a `cursor` when more results exist. The client repeats the same request with that cursor until Square omits it. SearchOrders uses a page size of 500; payments and refunds use 100; customers use 100. Catalog List returns up to 1,000 objects per page.
+List/search endpoints return a `cursor` when more results exist. The client repeats the same request with that cursor until Square omits it. SearchOrders uses a page size of 500; payments and refunds use 100; customers use 100. Catalog List returns up to 1,000 objects per page and is followed until Square omits `cursor` (or `SQUARE_MAX_PAGES` is exceeded, which fails rather than truncating).
 
-## Current vs future role
+## Manual catalog import
 
-Today: audit-only, in-memory, no PERSON / CUSTOMER / TRANSACTION / order tables.
+Read-only `GET /v2/catalog/list?types=CATEGORY,ITEM,ITEM_VARIATION` (Square-Version `2026-08-19`). Production command runs compiled dist JS:
 
-Later: Square is expected to be the farm-store POS source (retail items, tenders, refunds), complementary to Wherewolf (guests/visits) and FareHarbor (bookings/revenue). Permanent ingestion is not built yet.
+```
+npm run import:square-catalog
+npm run normalize:square-catalog
+```
+
+`:dev` variants use `tsx`. Import writes sanitized `source_snapshot` rows only. Normalize is a separate command.
+
+### Snapshots
+
+`provider = square`. `entity_type` is `category`, `item`, or `item_variation`. `external_id` is the CatalogObject id. Identical sanitized JSON reuses the existing `(provider, entity_type, external_id, payload_hash)` row.
+
+Sanitized fields:
+
+| Type | Fields |
+| --- | --- |
+| CATEGORY | `id`, `type`, `version`, `updated_at`, `is_deleted`, `is_archived`, `name` |
+| ITEM | plus `category_ids`, `variation_ids` |
+| ITEM_VARIATION | plus `item_id`, `sku` |
+
+Category membership prefers `item_data.categories[].id` (current API). If that collection is empty, fall back to deprecated `item_data.category_id`. `reporting_category` is not merchandising membership and is ignored. Nested `item_data.variations` are also snapshotted as `item_variation` rows.
+
+No customer data. No raw leftover Square fields (prices, descriptions, location flags).
+
+### Canonical mapping
+
+| Square | `source_identity` | Canonical |
+| --- | --- | --- |
+| CATEGORY id | `square` / `category` / id | `product_category` |
+| ITEM id | `square` / `item` / id | `product` |
+| ITEM_VARIATION id | `square` / `item_variation` / id | `product_variation` |
+| item category ids | — | `product_category_assignment` |
+
+Identity is always the Square CatalogObject id. Names may duplicate. SKU is nullable and never used as identity.
+
+### Status
+
+| Square | Canonical `status` |
+| --- | --- |
+| `is_deleted = true` | `deleted` |
+| else `is_archived = true` | `archived` |
+| else | `active` |
+
+Deleted/archived objects are retained. They are never hard-deleted.
+
+### Assignments
+
+Latest item snapshot category ids are synchronized onto `product_category_assignment` (insert current, delete memberships no longer present). Uncategorized items are valid. Unresolved Square category ids are counted, not invented. Removing an assignment does not delete the category or product.
+
+### Transactions
+
+Each category snapshot applies in its own transaction. Each item snapshot applies in one transaction that also applies that item’s variation snapshots. Remaining variations apply in their own transactions. A variation whose parent item identity does not exist writes nothing.
+
+Newest snapshot per Square id (by `observed_at`, then catalog `version`) is selected. Applying an older snapshot is `skipped_stale`.
+
+Synthetic tests (no live Square API):
+
+```
+npm run test:square-catalog
+```

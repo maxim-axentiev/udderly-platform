@@ -45,7 +45,12 @@
     "inspect:wherewolf:dev": "npm run inspect:wherewolf:dev -w @udderly/api --",
     "resanitize:wherewolf": "npm run resanitize:wherewolf -w @udderly/api --",
     "resanitize:wherewolf:dev": "npm run resanitize:wherewolf:dev -w @udderly/api --",
-    "test:wherewolf-import": "npm run test:wherewolf-import -w @udderly/api"
+    "test:wherewolf-import": "npm run test:wherewolf-import -w @udderly/api",
+    "import:square-catalog": "npm run import:square-catalog -w @udderly/api --",
+    "import:square-catalog:dev": "npm run import:square-catalog:dev -w @udderly/api --",
+    "normalize:square-catalog": "npm run normalize:square-catalog -w @udderly/api --",
+    "normalize:square-catalog:dev": "npm run normalize:square-catalog:dev -w @udderly/api --",
+    "test:square-catalog": "npm run test:square-catalog -w @udderly/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

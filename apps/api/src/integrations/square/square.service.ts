@@ -41,7 +41,7 @@ export class SquareService {
     }
   }
 
-  private requireClient(): SquareClient {
+  createClient(): SquareClient {
     const accessToken = this.env.squareAccessToken;
     const locationId = this.env.squareLocationId;
 
@@ -50,6 +50,10 @@ export class SquareService {
     }
 
     return new SquareClient({ accessToken, locationId });
+  }
+
+  private requireClient(): SquareClient {
+    return this.createClient();
   }
 
   private logSafeFailure(action: string, error: unknown): void {

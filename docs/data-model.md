@@ -375,9 +375,9 @@ Reversal of payment/sale cash. Positive minor units. **Not** a negative payment.
 
 ### `product_category` / `product` / `product_variation` / `product_category_assignment`
 
-Square Catalog and later other catalogs. `status` archives in place — still resolvable historically. SKU on variation, indexed, **not** unique (audit: many variations have none). Category/product/variation provider ids via `source_identity`. `catalog_version` is not our PK.
+Square Catalog and later other catalogs. `status` is `active` / `archived` / `deleted` — still resolvable historically; never hard-delete. SKU on variation, indexed, **not** unique (audit: many variations have none). Category/product/variation provider ids via `source_identity`. `catalog_version` is not our PK.
 
-A product may belong to **multiple** categories. Membership is `product_category_assignment` (`product_id`, `category_id`, `created_at`) with composite primary key `(product_id, category_id)`. There is no `product.category_id` and no invented primary category. Square `category` ids resolve to `product_category`; item–category links later populate the assignment table.
+A product may belong to **multiple** categories. Membership is `product_category_assignment` (`product_id`, `category_id`, `created_at`) with composite primary key `(product_id, category_id)`. There is no `product.category_id` and no invented primary category. Square CATEGORY → `product_category`; ITEM → `product`; ITEM_VARIATION → `product_variation`; item category membership → `product_category_assignment`. See `docs/square.md`.
 
 **PII:** no.
 
@@ -523,7 +523,7 @@ Webhook history of status changes stays in `integration_events`, not a history t
 
 **Now:** `integration_events` JSONB for FareHarbor Booking with Payments. Duplicates hashed. Indexed by provider + entity type + `booking.uuid`. Not exposed over HTTP.
 
-**Now:** `source_snapshot` for Wherewolf pull imports (sanitized guests/reservations). Unique on `(provider, entity_type, external_id, payload_hash)`. `observed_at` is import/observation time at Goat Barn, not the visit date. FareHarbor Booking details CSVs are not snapshotted; they are disk-only input. Square history pulls still later. Never persist Wherewolf DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields.
+**Now:** `source_snapshot` for Wherewolf pull imports (sanitized guests/reservations) and Square catalog pulls (sanitized CATEGORY / ITEM / ITEM_VARIATION). Unique on `(provider, entity_type, external_id, payload_hash)`. `observed_at` is import/observation time at Goat Barn, not the visit date. FareHarbor Booking details CSVs are not snapshotted; they are disk-only input. Square orders/payments are not snapshotted yet. Never persist Wherewolf DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields.
 
 Normalized tables omit DOB, signatures, IP, cards, receipt URLs on purpose. Snapshots are how we re-derive or prove what the provider said.
 

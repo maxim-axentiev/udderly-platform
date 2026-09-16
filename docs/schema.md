@@ -66,7 +66,7 @@ Line amounts: `gross_amount` (before discount), `discount_amount`, `tax_amount`,
 
 ## Catalog
 
-`product_category` / `product` / `product_variation` / `product_category_assignment`. A product may belong to **many** categories (Square items can). There is no `product.category_id` and no primary category. Assignment FKs are `ON DELETE RESTRICT`. Composite primary key `(product_id, category_id)`; extra index on `category_id`. `status` archives in place (`active` / `archived`). SKU on variation, indexed, **not** unique. Provider catalog ids stay in `source_identity` (`category`, `item`, `item_variation`). Square item category membership later fills `product_category_assignment`.
+`product_category` / `product` / `product_variation` / `product_category_assignment`. A product may belong to **many** categories (Square items can). There is no `product.category_id` and no primary category. Assignment FKs are `ON DELETE RESTRICT`. Composite primary key `(product_id, category_id)`; extra index on `category_id`. `status` is `active` / `archived` / `deleted` (Square `is_deleted` never hard-deletes). SKU on variation, indexed, **not** unique. Provider catalog ids stay in `source_identity` (`category`, `item`, `item_variation`). Square item category membership fills `product_category_assignment`.
 
 ## `source_snapshot`
 
@@ -75,6 +75,8 @@ Pull-API copies. Unique `(provider, entity_type, external_id, payload_hash)` so 
 `observed_at` is the time Goat Barn imported/observed the source record. It is **not** the visit/business date.
 
 Wherewolf payloads are sanitized before insert (no DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields). `visit.postal` is left null for this phase.
+
+Square catalog snapshots are sanitized CatalogObject subsets (`square` / `category` \| `item` \| `item_variation`). See `docs/square.md`.
 
 ## `source_identity`
 
