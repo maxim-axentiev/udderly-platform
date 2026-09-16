@@ -27,7 +27,8 @@ async function main(): Promise<void> {
     printResult(result);
     if (
       result.outcome === "not_found" ||
-      result.outcome === "invalid"
+      result.outcome === "invalid" ||
+      result.outcome === "identity_conflict"
     ) {
       process.exitCode = 1;
     }
@@ -103,6 +104,13 @@ function printResult(
 
   if (result.outcome === "not_found") {
     console.error("FareHarbor integration event not found.");
+    return;
+  }
+
+  if (result.outcome === "identity_conflict") {
+    console.error(
+      `Refused: FareHarbor ${result.kind} identity conflict on event ${result.eventId}. No silent merge.`,
+    );
     return;
   }
 

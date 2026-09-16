@@ -6,13 +6,22 @@ import {
   experiences,
 } from "../../database/schema/experiences";
 import { FAREHARBOR_PROVIDER } from "./fareharbor.crypto";
-import { FAREHARBOR_ITEM_OBJECT_TYPE } from "./fareharbor.constants";
+import {
+  FAREHARBOR_ITEM_OBJECT_TYPE,
+  FAREHARBOR_REPORT_ITEM_OBJECT_TYPE,
+} from "./fareharbor.constants";
 
 const EXPERIENCE_ID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export type FareharborExperienceMapCommand = {
   itemId: string;
+  name?: string;
+  experienceId?: string;
+};
+
+export type FareharborReportItemMapCommand = {
+  itemLabel: string;
   name?: string;
   experienceId?: string;
 };
@@ -51,6 +60,34 @@ export class FareharborExperienceMapService {
   async mapItem(
     command: FareharborExperienceMapCommand,
   ): Promise<FareharborExperienceMapResult> {
+    return this.mapExternal({
+      itemId: command.itemId,
+      name: command.name,
+      experienceId: command.experienceId,
+      objectType: FAREHARBOR_ITEM_OBJECT_TYPE,
+      lockPrefix: "fh-item-map",
+    });
+  }
+
+  async mapReportItem(
+    command: FareharborReportItemMapCommand,
+  ): Promise<FareharborExperienceMapResult> {
+    return this.mapExternal({
+      itemId: command.itemLabel,
+      name: command.name,
+      experienceId: command.experienceId,
+      objectType: FAREHARBOR_REPORT_ITEM_OBJECT_TYPE,
+      lockPrefix: "fh-report-item-map",
+    });
+  }
+
+  private async mapExternal(command: {
+    itemId: string;
+    name?: string;
+    experienceId?: string;
+    objectType: string;
+    lockPrefix: string;
+  }): Promise<FareharborExperienceMapResult> {
     const itemId = command.itemId.trim();
     if (!itemId) {
       return { outcome: "invalid", reason: "item_id" };
@@ -69,10 +106,14 @@ export class FareharborExperienceMapService {
 
     return this.database.db.transaction(async (tx) => {
       await tx.execute(
-        sql`select pg_advisory_xact_lock(hashtextextended(${`fh-item-map-${itemId}`}, 0))`,
+        sql`select pg_advisory_xact_lock(hashtextextended(${`${command.lockPrefix}-${itemId}`}, 0))`,
       );
 
-      const existingMapping = await this.findItemMapping(tx, itemId);
+      const existingMapping = await this.findMapping(
+        tx,
+        command.objectType,
+        itemId,
+      );
 
       if (experienceId) {
         const [experience] = await tx
@@ -90,6 +131,7 @@ export class FareharborExperienceMapService {
         return this.upsertMapping(tx, {
           itemId,
           experienceId,
+          objectType: command.objectType,
           existingMapping,
           createdExperience: false,
         });
@@ -112,6 +154,7 @@ export class FareharborExperienceMapService {
         return this.upsertMapping(tx, {
           itemId,
           experienceId: matches[0].id,
+          objectType: command.objectType,
           existingMapping,
           createdExperience: false,
         });
@@ -140,14 +183,16 @@ export class FareharborExperienceMapService {
       return this.upsertMapping(tx, {
         itemId,
         experienceId: createdId,
+        objectType: command.objectType,
         existingMapping,
         createdExperience: true,
       });
     });
   }
 
-  private async findItemMapping(
+  private async findMapping(
     tx: Pick<DatabaseService["db"], "select">,
+    objectType: string,
     itemId: string,
   ): Promise<{ id: string; experienceId: string } | undefined> {
     const rows = await tx
@@ -159,10 +204,7 @@ export class FareharborExperienceMapService {
       .where(
         and(
           eq(experienceSourceMappings.provider, FAREHARBOR_PROVIDER),
-          eq(
-            experienceSourceMappings.providerObjectType,
-            FAREHARBOR_ITEM_OBJECT_TYPE,
-          ),
+          eq(experienceSourceMappings.providerObjectType, objectType),
           eq(experienceSourceMappings.externalId, itemId),
         ),
       )
@@ -176,6 +218,7 @@ export class FareharborExperienceMapService {
     input: {
       itemId: string;
       experienceId: string;
+      objectType: string;
       existingMapping?: {
         id: string;
         experienceId: string;
@@ -202,7 +245,7 @@ export class FareharborExperienceMapService {
     await tx.insert(experienceSourceMappings).values({
       experienceId: input.experienceId,
       provider: FAREHARBOR_PROVIDER,
-      providerObjectType: FAREHARBOR_ITEM_OBJECT_TYPE,
+      providerObjectType: input.objectType,
       externalId: input.itemId,
     });
 

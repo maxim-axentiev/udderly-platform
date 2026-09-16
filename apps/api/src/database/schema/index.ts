@@ -13,3 +13,4 @@ export {
 } from "./bookings";
 export { visits } from "./visits";
 export { sourceSnapshots } from "./source-snapshots";
+export { sourceObjectClassifications } from "./source-object-classification";

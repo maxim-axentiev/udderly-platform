@@ -1,6 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
 import { Injectable } from "@nestjs/common";
-import type { AppDatabase } from "../../database/database.service";
 import {
   bookingContacts,
   bookingPartyMembers,
@@ -10,7 +9,6 @@ import {
   experienceSourceMappings,
   sessions,
 } from "../../database/schema/experiences";
-import { sourceIdentities } from "../../database/schema/source-identity";
 import {
   FAREHARBOR_BOOKING_ENTITY,
   FAREHARBOR_PROVIDER,
@@ -23,12 +21,15 @@ import {
   INTERNAL_BOOKING,
   INTERNAL_SESSION,
 } from "./fareharbor.constants";
+import {
+  FareharborIdentityConflictError,
+  findResolvedFareharborIdentity,
+  upsertFareharborIdentity,
+  type FareharborDb,
+} from "./fareharbor-identity";
 import type { FareharborBookingSnapshot } from "./fareharbor.snapshot";
 
-export type Db = Pick<
-  AppDatabase,
-  "select" | "insert" | "update" | "delete" | "execute"
->;
+export type Db = FareharborDb;
 
 export type FareharborNormalizeApplyResult =
   | { outcome: "applied" }
@@ -54,10 +55,12 @@ export class FareharborNormalizer {
       return mapping;
     }
 
+    const existingBookingId = await this.resolveCanonicalBookingId(db, snapshot);
     const sessionId = await this.upsertSession(
       db,
       snapshot,
       mapping.experienceId,
+      existingBookingId,
     );
     const bookingId = await this.upsertBooking(
       db,
@@ -65,6 +68,7 @@ export class FareharborNormalizer {
       mapping.experienceId,
       sessionId,
       observedAt,
+      existingBookingId,
     );
     await this.linkRebookings(db, snapshot, bookingId);
     await this.upsertContact(db, snapshot, bookingId, observedAt);
@@ -136,28 +140,91 @@ export class FareharborNormalizer {
     return rows[0];
   }
 
+  private async resolveCanonicalBookingId(
+    db: Db,
+    snapshot: FareharborBookingSnapshot,
+  ): Promise<string | undefined> {
+    const uuidBookingId = await findResolvedFareharborIdentity(
+      db,
+      FAREHARBOR_BOOKING_ENTITY,
+      snapshot.uuid,
+      INTERNAL_BOOKING,
+    );
+    const pkBookingId = snapshot.pk
+      ? await findResolvedFareharborIdentity(
+          db,
+          FAREHARBOR_BOOKING_PK_ENTITY,
+          snapshot.pk,
+          INTERNAL_BOOKING,
+        )
+      : undefined;
+
+    if (uuidBookingId && pkBookingId && uuidBookingId !== pkBookingId) {
+      throw new FareharborIdentityConflictError("booking", {
+        uuidBookingId,
+        pkBookingId,
+      });
+    }
+
+    return uuidBookingId ?? pkBookingId;
+  }
+
   private async upsertSession(
     db: Db,
     snapshot: FareharborBookingSnapshot,
     experienceId: string,
+    existingBookingId?: string,
   ): Promise<string | undefined> {
     const availability = snapshot.availability;
+    const historicalSessionId = existingBookingId
+      ? await this.bookingSessionId(db, existingBookingId)
+      : undefined;
+
     if (!availability?.startAt) {
-      return undefined;
+      return historicalSessionId;
     }
 
     await db.execute(
       sql`select pg_advisory_xact_lock(hashtextextended(${`fh-avail-${availability.pk}`}, 0))`,
     );
 
-    const existingId = await this.findResolvedIdentity(
+    const availabilitySessionId = await findResolvedFareharborIdentity(
       db,
       FAREHARBOR_AVAILABILITY_ENTITY,
       availability.pk,
       INTERNAL_SESSION,
     );
 
-    if (existingId) {
+    if (
+      historicalSessionId &&
+      availabilitySessionId &&
+      historicalSessionId !== availabilitySessionId
+    ) {
+      throw new FareharborIdentityConflictError("session", {
+        existingInternalId: historicalSessionId,
+        attemptedInternalId: availabilitySessionId,
+      });
+    }
+
+    const sessionId = historicalSessionId ?? availabilitySessionId;
+    if (sessionId) {
+      const existing = await this.loadSession(db, sessionId);
+      if (existing && existing.experienceId !== experienceId) {
+        throw new FareharborIdentityConflictError("session", {
+          existingInternalId: sessionId,
+          attemptedInternalId: sessionId,
+        });
+      }
+      if (
+        existing &&
+        existing.startAt.getTime() !== availability.startAt.getTime()
+      ) {
+        throw new FareharborIdentityConflictError("session", {
+          existingInternalId: sessionId,
+          attemptedInternalId: sessionId,
+        });
+      }
+
       await db
         .update(sessions)
         .set({
@@ -167,8 +234,16 @@ export class FareharborNormalizer {
           status: availability.status,
           updatedAt: new Date(),
         })
-        .where(eq(sessions.id, existingId));
-      return existingId;
+        .where(eq(sessions.id, sessionId));
+
+      await upsertFareharborIdentity(
+        db,
+        FAREHARBOR_AVAILABILITY_ENTITY,
+        availability.pk,
+        INTERNAL_SESSION,
+        sessionId,
+      );
+      return sessionId;
     }
 
     const inserted = await db
@@ -181,20 +256,47 @@ export class FareharborNormalizer {
         status: availability.status,
       })
       .returning({ id: sessions.id });
-    const sessionId = inserted[0]?.id;
-    if (!sessionId) {
+    const createdId = inserted[0]?.id;
+    if (!createdId) {
       throw new Error("session_insert_failed");
     }
 
-    await this.upsertIdentity(
+    await upsertFareharborIdentity(
       db,
       FAREHARBOR_AVAILABILITY_ENTITY,
       availability.pk,
       INTERNAL_SESSION,
-      sessionId,
+      createdId,
     );
 
-    return sessionId;
+    return createdId;
+  }
+
+  private async bookingSessionId(
+    db: Db,
+    bookingId: string,
+  ): Promise<string | undefined> {
+    const rows = await db
+      .select({ sessionId: bookings.sessionId })
+      .from(bookings)
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
+    return rows[0]?.sessionId ?? undefined;
+  }
+
+  private async loadSession(
+    db: Db,
+    sessionId: string,
+  ): Promise<{ experienceId: string; startAt: Date } | undefined> {
+    const rows = await db
+      .select({
+        experienceId: sessions.experienceId,
+        startAt: sessions.startAt,
+      })
+      .from(sessions)
+      .where(eq(sessions.id, sessionId))
+      .limit(1);
+    return rows[0];
   }
 
   private async upsertBooking(
@@ -203,14 +305,8 @@ export class FareharborNormalizer {
     experienceId: string,
     sessionId: string | undefined,
     observedAt: Date,
+    existingBookingId?: string,
   ): Promise<string> {
-    const existingId = await this.findResolvedIdentity(
-      db,
-      FAREHARBOR_BOOKING_ENTITY,
-      snapshot.uuid,
-      INTERNAL_BOOKING,
-    );
-
     const values = {
       sessionId,
       experienceId,
@@ -224,10 +320,13 @@ export class FareharborNormalizer {
       updatedAt: new Date(),
     };
 
-    if (existingId) {
-      await db.update(bookings).set(values).where(eq(bookings.id, existingId));
-      await this.upsertBookingIdentities(db, snapshot, existingId);
-      return existingId;
+    if (existingBookingId) {
+      await db
+        .update(bookings)
+        .set(values)
+        .where(eq(bookings.id, existingBookingId));
+      await this.upsertBookingIdentities(db, snapshot, existingBookingId);
+      return existingBookingId;
     }
 
     const inserted = await db
@@ -248,7 +347,7 @@ export class FareharborNormalizer {
     snapshot: FareharborBookingSnapshot,
     bookingId: string,
   ): Promise<void> {
-    await this.upsertIdentity(
+    await upsertFareharborIdentity(
       db,
       FAREHARBOR_BOOKING_ENTITY,
       snapshot.uuid,
@@ -257,7 +356,7 @@ export class FareharborNormalizer {
     );
 
     if (snapshot.pk) {
-      await this.upsertIdentity(
+      await upsertFareharborIdentity(
         db,
         FAREHARBOR_BOOKING_PK_ENTITY,
         snapshot.pk,
@@ -273,7 +372,7 @@ export class FareharborNormalizer {
     bookingId: string,
   ): Promise<void> {
     const fromId = snapshot.rebookedFromUuid
-      ? await this.findResolvedIdentity(
+      ? await findResolvedFareharborIdentity(
           db,
           FAREHARBOR_BOOKING_ENTITY,
           snapshot.rebookedFromUuid,
@@ -281,7 +380,7 @@ export class FareharborNormalizer {
         )
       : undefined;
     const toId = snapshot.rebookedToUuid
-      ? await this.findResolvedIdentity(
+      ? await findResolvedFareharborIdentity(
           db,
           FAREHARBOR_BOOKING_ENTITY,
           snapshot.rebookedToUuid,
@@ -368,7 +467,7 @@ export class FareharborNormalizer {
     const seenIdentityIds = new Set<string>();
 
     for (const customer of snapshot.customers) {
-      const identityId = await this.upsertIdentity(
+      const identityId = await upsertFareharborIdentity(
         db,
         FAREHARBOR_CUSTOMER_ENTITY,
         customer.pk,
@@ -443,87 +542,4 @@ export class FareharborNormalizer {
     }
   }
 
-  private async findResolvedIdentity(
-    db: Db,
-    entityType: string,
-    externalId: string,
-    internalEntityType: string,
-  ): Promise<string | undefined> {
-    const rows = await db
-      .select({
-        internalEntityId: sourceIdentities.internalEntityId,
-        internalEntityType: sourceIdentities.internalEntityType,
-      })
-      .from(sourceIdentities)
-      .where(
-        and(
-          eq(sourceIdentities.provider, FAREHARBOR_PROVIDER),
-          eq(sourceIdentities.entityType, entityType),
-          eq(sourceIdentities.externalId, externalId),
-        ),
-      )
-      .limit(1);
-
-    const row = rows[0];
-    if (
-      row?.internalEntityType === internalEntityType &&
-      row.internalEntityId
-    ) {
-      return row.internalEntityId;
-    }
-
-    return undefined;
-  }
-
-  private async upsertIdentity(
-    db: Db,
-    entityType: string,
-    externalId: string,
-    internalEntityType?: string,
-    internalEntityId?: string,
-  ): Promise<string> {
-    const rows = await db
-      .select({ id: sourceIdentities.id })
-      .from(sourceIdentities)
-      .where(
-        and(
-          eq(sourceIdentities.provider, FAREHARBOR_PROVIDER),
-          eq(sourceIdentities.entityType, entityType),
-          eq(sourceIdentities.externalId, externalId),
-        ),
-      )
-      .limit(1);
-
-    const existingId = rows[0]?.id;
-    if (existingId) {
-      if (internalEntityType && internalEntityId) {
-        await db
-          .update(sourceIdentities)
-          .set({
-            internalEntityType,
-            internalEntityId,
-            updatedAt: new Date(),
-          })
-          .where(eq(sourceIdentities.id, existingId));
-      }
-      return existingId;
-    }
-
-    const inserted = await db
-      .insert(sourceIdentities)
-      .values({
-        provider: FAREHARBOR_PROVIDER,
-        entityType,
-        externalId,
-        internalEntityType,
-        internalEntityId,
-      })
-      .returning({ id: sourceIdentities.id });
-    const id = inserted[0]?.id;
-    if (!id) {
-      throw new Error("source_identity_insert_failed");
-    }
-
-    return id;
-  }
 }

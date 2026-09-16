@@ -21,3 +21,4 @@ Thumbs.db
 .vscode/
 !/.vscode/extensions.json
 .local/
+imports/protected/

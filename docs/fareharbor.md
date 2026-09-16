@@ -103,6 +103,48 @@ npm run map:fareharbor-experience -- --item-id <fareharbor-item-pk> --experience
 
 `--name` creates a canonical experience only when no experience has that exact name. One exact name match is reused. Two or more exact matches stop for `--experience-id`. An item already mapped to a different experience is refused; remap is not implemented. `provider_object_type` is `item`. `--name` is the canonical experience name only; `external_label` stays null until a later normalize sees `booking.availability.item.name`. Item mappings are not copied into `source_identity`.
 
+## Historical Booking Details CSV
+
+Manual operational history from FareHarbor’s **Bookings** report (Booking details export). This does **not** call the External API and does **not** store the CSV.
+
+The file is temporary local input only:
+
+- Keep it outside the git repo, or in gitignored `imports/protected/`
+- Restrict permissions (`chmod 600` on Unix)
+- Delete the file after a successful validated import
+- Never copy the CSV into PostgreSQL, `source_snapshot`, or `integration_events`
+- Logs and CLI output must not print contact name, email, phone, booking notes, or cancellation notes
+
+Production commands run compiled `apps/api/dist` JavaScript. Build first (`npm run build -w @udderly/api`). `:dev` variants use `tsx` for local source.
+
+```
+npm run map:fareharbor-report-item -- --item-label "Goat Recess" --name "Goat Recess"
+npm run map:fareharbor-report-item -- --item-label "Goat Recess" --experience-id <uuid>
+npm run classify:fareharbor-report-item -- --item-label "Gift Card" --non-experience
+npm run import:fareharbor-report -- --file /path/to/report.csv --dry-run
+npm run import:fareharbor-report -- --file /path/to/report.csv
+```
+
+Report `Item` labels are **not** FareHarbor item PKs. Experience mapping uses `provider=fareharbor`, `provider_object_type=report_item_label`, `external_id` = exact CSV label. That mapping is not copied into `source_identity`.
+
+Non-experience labels (gift cards, adopt packages, and similar) are stored in `source_object_classification` as `non_experience`. They are not hardcoded in the importer. Unknown labels are skipped with no partial writes for that row.
+
+Booking identity from the report is `fareharbor` / `booking_pk` / digits from `#123456789`. A later Booking-with-Payments webhook that carries the same `booking.pk` plus `booking.uuid` must reuse that canonical booking and attach `fareharbor` / `booking` / `<uuid>`. The reverse (uuid already resolved, pk new) attaches `booking_pk`. If uuid and pk resolve to different bookings, normalize reports `identity_conflict` and does not merge.
+
+Sessions are created from report `Availability` (`YYYY-MM-DD @ hh:mmam/pm`) in `America/Toronto`. `end_at`, `capacity`, and `status` stay null. Idempotency uses a **report-derived** identity `fareharbor` / `availability_report_key` / `<experienceId>:<startAt ISO>`. That is not a FareHarbor availability PK. A later webhook `availability.pk` attaches to the existing historical session when the booking already points at it and start/experience evidence matches; conflicts are reported rather than merged.
+
+The importer writes `booking`, `booking_contact`, `session`, and `source_identity` only. It does **not** create `booking_party_member` from `# of Pax`, PERSON, visit, sale, payment, or refund. Notes and money columns are ignored.
+
+`Last Booked By` is categorized as `online` when it is exactly `Online`; any other value becomes `internal`. Staff names are not stored on `booking`.
+
+Dry-run parses and validates the whole file, reads mappings/classifications, writes nothing, and prints safe counts plus unknown Item labels.
+
+Synthetic tests (fake data only):
+
+```
+npm run test:fareharbor-report
+```
+
 Payloads are treated as sensitive. They are not logged and are not returned from HTTP APIs.
 
 The same inbox can later store FareHarbor **Item** webhooks (`item.pk`, `item.name`, `company`, `external_api_url`, `dashboard_url`). Item processing is not implemented yet.
@@ -111,7 +153,7 @@ Crew Maker is out of scope.
 
 ## External API and history
 
-This phase does **not** call the FareHarbor External API. Historical data is expected later from reports/exports, then reconciled against webhook identity (`booking.uuid`, later change events, payments/refunds).
+This phase does **not** call the FareHarbor External API. Historical operational bookings can be imported from a Booking details CSV (see above) and later reconciled with webhook `booking.uuid` / `booking.pk` / `availability.pk`.
 
 ## Local environment
 
@@ -153,7 +195,7 @@ npm run map:fareharbor-experience -- --item-id <pk> --name "Miniature Donkey Vis
 npm run map:fareharbor-experience -- --item-id <pk> --experience-id <uuid>
 ```
 
-Those npm scripts run compiled `apps/api/dist` JavaScript (`node`, not `tsx`). Build the API first (`npm run build -w @udderly/api`). For unbuilt local source, use the `:dev` variants (`normalize:fareharbor:dev`, `map:fareharbor-experience:dev`, `integrations:recover:dev`).
+Those npm scripts run compiled `apps/api/dist` JavaScript (`node`, not `tsx`). Build the API first (`npm run build -w @udderly/api`). For unbuilt local source, use the `:dev` variants (`normalize:fareharbor:dev`, `map:fareharbor-experience:dev`, `import:fareharbor-report:dev`, `map:fareharbor-report-item:dev`, `classify:fareharbor-report-item:dev`, `integrations:recover:dev`).
 
 ## Next step before real FareHarbor delivery
 

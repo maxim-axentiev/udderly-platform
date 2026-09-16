@@ -6,6 +6,7 @@ import {
   FAREHARBOR_BOOKING_EVENT_TYPE,
   FAREHARBOR_PROVIDER,
 } from "./fareharbor.crypto";
+import { FareharborIdentityConflictError } from "./fareharbor-identity";
 import { FareharborNormalizer } from "./fareharbor-normalizer";
 import { extractFareharborBookingSnapshot } from "./fareharbor.snapshot";
 
@@ -19,7 +20,12 @@ export type FareharborNormalizeResult =
       itemName?: string;
     }
   | { outcome: "not_found" }
-  | { outcome: "invalid"; reason: "duplicate" | "not_fareharbor" };
+  | { outcome: "invalid"; reason: "duplicate" | "not_fareharbor" }
+  | {
+      outcome: "identity_conflict";
+      eventId: string;
+      kind: "booking" | "session";
+    };
 
 @Injectable()
 export class FareharborNormalizeService {
@@ -80,47 +86,62 @@ export class FareharborNormalizeService {
 
     const snapshot = extractFareharborBookingSnapshot(event.payload);
 
-    return this.database.db.transaction(async (tx) => {
-      if (event.externalEntityId) {
-        await tx.execute(
-          sql`select pg_advisory_xact_lock(hashtextextended(${event.externalEntityId}, 0))`,
-        );
-        const [newer] = await tx
-          .select({ id: integrationEvents.id })
-          .from(integrationEvents)
-          .where(
-            and(
-              ne(integrationEvents.id, eventId),
-              eq(integrationEvents.provider, FAREHARBOR_PROVIDER),
-              eq(integrationEvents.externalEntityId, event.externalEntityId),
-              isNull(integrationEvents.duplicateOf),
-              gt(
-                integrationEvents.receivedAt,
-                sql`(select received_at from integration_events where id = ${eventId})`,
+    try {
+      return await this.database.db.transaction(async (tx) => {
+        if (event.externalEntityId) {
+          await tx.execute(
+            sql`select pg_advisory_xact_lock(hashtextextended(${event.externalEntityId}, 0))`,
+          );
+          const [newer] = await tx
+            .select({ id: integrationEvents.id })
+            .from(integrationEvents)
+            .where(
+              and(
+                ne(integrationEvents.id, eventId),
+                eq(integrationEvents.provider, FAREHARBOR_PROVIDER),
+                eq(integrationEvents.externalEntityId, event.externalEntityId),
+                isNull(integrationEvents.duplicateOf),
+                gt(
+                  integrationEvents.receivedAt,
+                  sql`(select received_at from integration_events where id = ${eventId})`,
+                ),
               ),
-            ),
-          )
-          .limit(1);
-        if (newer) {
-          return { outcome: "skipped_stale" as const, eventId };
+            )
+            .limit(1);
+          if (newer) {
+            return { outcome: "skipped_stale" as const, eventId };
+          }
         }
-      }
 
-      const applied = await this.normalizer.apply(tx, snapshot, event.receivedAt);
-      if (applied.outcome === "mapping_required") {
+        const applied = await this.normalizer.apply(
+          tx,
+          snapshot,
+          event.receivedAt,
+        );
+        if (applied.outcome === "mapping_required") {
+          return {
+            outcome: "mapping_required" as const,
+            eventId,
+            itemPk: applied.itemPk,
+            itemName: applied.itemName,
+          };
+        }
+
         return {
-          outcome: "mapping_required" as const,
+          outcome: "applied" as const,
           eventId,
-          itemPk: applied.itemPk,
-          itemName: applied.itemName,
+          bookingStatus: event.safeMetadata?.bookingStatus ?? snapshot.status,
+        };
+      });
+    } catch (error: unknown) {
+      if (error instanceof FareharborIdentityConflictError) {
+        return {
+          outcome: "identity_conflict" as const,
+          eventId,
+          kind: error.kind,
         };
       }
-
-      return {
-        outcome: "applied" as const,
-        eventId,
-        bookingStatus: event.safeMetadata?.bookingStatus ?? snapshot.status,
-      };
-    });
+      throw error;
+    }
   }
 }

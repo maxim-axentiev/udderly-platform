@@ -1,6 +1,6 @@
 # Operational schema (Phase 1)
 
-PostgreSQL tables from migrations `apps/api/drizzle/0002_operational_core.sql`, `0003_booking_party_member_lifecycle.sql`, and `0004_source_snapshot.sql`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). Operational booking/visit tables stay empty until the matching normalize command. Design: `docs/data-model.md`.
+PostgreSQL tables from migrations `apps/api/drizzle/0002_operational_core.sql`, `0003_booking_party_member_lifecycle.sql`, `0004_source_snapshot.sql`, and `0005_source_object_classification.sql`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored; they are read from disk and discarded. Operational booking/visit tables stay empty until the matching import/normalize command. Design: `docs/data-model.md`.
 
 ## Tables
 
@@ -14,6 +14,8 @@ PostgreSQL tables from migrations `apps/api/drizzle/0002_operational_core.sql`, 
 | `booking_contact` | Booker (PII) |
 | `booking_party_member` | Expected participant |
 | `visit` | Actual attendance (PII geography/demographics) |
+| `source_snapshot` | Sanitized pull-API copies (Wherewolf) |
+| `source_object_classification` | Explicit non-experience provider objects (FH report labels) |
 
 Plus existing `platform_meta`, `integration_events`, and `source_snapshot`.
 
@@ -51,6 +53,21 @@ npm run map:fareharbor-experience -- --item-id <pk> --experience-id <uuid>
 ```
 
 Rows use `provider = fareharbor`, `provider_object_type = item`, `external_id` = item PK as text. `external_label` is the provider item name, not the canonical `--name`. The mapping CLI leaves it null; the FareHarbor normalizer may fill it from `availability.item.name`. The command is idempotent. It will not overwrite an item that already maps to a different experience.
+
+FareHarbor Booking details CSV item labels (not item PKs) are mapped with:
+
+```
+npm run map:fareharbor-report-item -- --item-label "Goat Recess" --name "Goat Recess"
+npm run map:fareharbor-report-item -- --item-label "Goat Recess" --experience-id <uuid>
+```
+
+Rows use `provider = fareharbor`, `provider_object_type = report_item_label`, `external_id` = exact CSV `Item` text. Labels that are not experiences are classified, not mapped:
+
+```
+npm run classify:fareharbor-report-item -- --item-label "Gift Card" --non-experience
+```
+
+That writes `source_object_classification` (`classification = non_experience`). Report-derived sessions use `source_identity` `entity_type = availability_report_key`, which is **not** a FareHarbor availability PK.
 
 Wherewolf activities are mapped with:
 

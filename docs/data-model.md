@@ -117,7 +117,8 @@ Later, if that Square customer is resolved to a PERSON, fill `internal_entity_ty
 
 **Aliases / rebooking**
 
-- FareHarbor: `entity_type=booking` (uuid) and `booking_pk` (pk) may both point at the same `booking` once created.
+- FareHarbor: `entity_type=booking` (uuid) and `booking_pk` (pk) may both point at the same `booking` once created. Historical CSV imports create `booking_pk` first; a later webhook attaches `booking`.
+- FareHarbor sessions: `availability` is the real FareHarbor availability PK. `availability_report_key` is a deterministic report-derived key (`<experienceId>:<startAt ISO>`), not an API identifier.
 - Wherewolf reservation `aliases` → extra unresolved or booking-linked rows (`booking_alias`).
 - Rebooking: new booking UUID/pk rows; old identities stay on the old booking.
 - Square archived catalog: identity remains; `product.is_archived = true`.
@@ -186,7 +187,7 @@ Canonical Udderly offering. Not a FareHarbor item PK.
 
 ### `experience_source_mapping`
 
-**Fields:** `experience_id`, `provider`, `provider_object_type` (`item` for FareHarbor, later `wherewolf_activity` \| `sanity_experience`), `external_id`, `external_label`. Unique `(provider, provider_object_type, external_id)`.
+**Fields:** `experience_id`, `provider`, `provider_object_type` (`item` for FareHarbor item PK, `report_item_label` for Booking details CSV labels, later `wherewolf_activity` \| `sanity_experience`), `external_id`, `external_label`. Unique `(provider, provider_object_type, external_id)`.
 
 **Evidence:** FH `availability.item.pk` + name; WW `activitiesAsObjects.id` + name.
 
@@ -510,7 +511,7 @@ Webhook history of status changes stays in `integration_events`, not a history t
 
 **Now:** `integration_events` JSONB for FareHarbor Booking with Payments. Duplicates hashed. Indexed by provider + entity type + `booking.uuid`. Not exposed over HTTP.
 
-**Now:** `source_snapshot` for Wherewolf pull imports (sanitized guests/reservations). Unique on `(provider, entity_type, external_id, payload_hash)`. `observed_at` is import/observation time at Goat Barn, not the visit date. Square/FH history pulls still later. Never persist Wherewolf DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields.
+**Now:** `source_snapshot` for Wherewolf pull imports (sanitized guests/reservations). Unique on `(provider, entity_type, external_id, payload_hash)`. `observed_at` is import/observation time at Goat Barn, not the visit date. FareHarbor Booking details CSVs are not snapshotted; they are disk-only input. Square history pulls still later. Never persist Wherewolf DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields.
 
 Normalized tables omit DOB, signatures, IP, cards, receipt URLs on purpose. Snapshots are how we re-derive or prove what the provider said.
 
@@ -563,6 +564,8 @@ The first business-data migration created the **operational core only** (`0002_o
 | `booking_contact` | Booker ≠ party |
 | `booking_party_member` | Expected participants |
 | `visit` | WW attendance facts |
+| `source_snapshot` | Sanitized Wherewolf pull copies |
+| `source_object_classification` | Explicit FH report labels that are not experiences |
 
 `experience_source_mapping` is retained: it is the assignment of a provider catalog object to an `experience` with a PostgreSQL FK. `source_identity` is the id registry and may be unresolved; it cannot FK to `experience`. Do not also store FareHarbor item / Wherewolf activity mappings only in `source_identity`.
 

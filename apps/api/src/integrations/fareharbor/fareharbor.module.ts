@@ -12,6 +12,8 @@ import { FareharborWebhookService } from "./fareharbor-webhook.service";
 import { FareharborNormalizer } from "./fareharbor-normalizer";
 import { FareharborNormalizeService } from "./fareharbor-normalize.service";
 import { FareharborExperienceMapService } from "./fareharbor-experience-map.service";
+import { FareharborReportImportService } from "./fareharbor-report-import.service";
+import { FareharborReportItemClassifyService } from "./fareharbor-report-item-classify.service";
 
 @Module({
   imports: [
@@ -28,6 +30,8 @@ import { FareharborExperienceMapService } from "./fareharbor-experience-map.serv
     FareharborNormalizer,
     FareharborNormalizeService,
     FareharborExperienceMapService,
+    FareharborReportItemClassifyService,
+    FareharborReportImportService,
   ],
 })
 export class FareharborModule {}
