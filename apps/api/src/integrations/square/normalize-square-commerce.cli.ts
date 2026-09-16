@@ -34,6 +34,8 @@ async function main(): Promise<void> {
     console.log(`Line items: ${result.lineItems}`);
     console.log(`Payments: ${result.payments}`);
     console.log(`Refunds: ${result.refunds}`);
+    console.log(`Return-only orders skipped: ${result.returnOnlyOrdersSkipped}`);
+    console.log(`Invalid order money skipped: ${result.invalidOrderMoneySkipped}`);
     console.log(`Unresolved catalog lines: ${result.unresolvedCatalogLines}`);
     console.log(`Unresolved payments: ${result.unresolvedPayments}`);
     console.log(`Unresolved refunds: ${result.unresolvedRefunds}`);

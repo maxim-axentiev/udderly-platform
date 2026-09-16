@@ -13,6 +13,40 @@ export type SquareSaleMoney = {
   tipAmount: number;
 };
 
+export type SquareOrderMoneyClassification =
+  | { kind: "sale"; money: SquareSaleMoney }
+  | { kind: "return_only"; netTotal: number }
+  | { kind: "invalid_order_money" };
+
+/**
+ * Classify Square order money for canonical sale mapping.
+ *
+ * Return-only (provider evidence, not a sale): top-level `total_money` amount
+ * is absent/unusable AND `net_amounts.total_money` is a finite amount < 0.
+ * Do not abs that net, do not store a $0/negative sale.
+ *
+ * Missing gross with zero, positive, or unreadable net is invalid order money,
+ * not return-only.
+ */
+export function classifySquareOrderMoney(
+  order: Record<string, unknown>,
+): SquareOrderMoneyClassification {
+  const grossTotal = moneyAmount(order.total_money);
+  if (grossTotal === undefined) {
+    const netTotal = moneyAmount(nestedObject(order.net_amounts)?.total_money);
+    if (netTotal !== undefined && netTotal < 0) {
+      return { kind: "return_only", netTotal };
+    }
+    return { kind: "invalid_order_money" };
+  }
+
+  const money = squareOrderSaleMoney(order);
+  if (!money) {
+    return { kind: "invalid_order_money" };
+  }
+  return { kind: "sale", money };
+}
+
 /**
  * Square order-level money → canonical sale (original/gross economics).
  *

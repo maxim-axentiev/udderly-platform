@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { squareOrderSaleMoney } from "./square.commerce.money";
+import {
+  classifySquareOrderMoney,
+  squareOrderSaleMoney,
+} from "./square.commerce.money";
 import {
   sanitizeSquareOrder,
   sanitizeSquarePayment,
@@ -41,6 +44,92 @@ test("net_amounts after a return do not reduce canonical sale fields", () => {
   assert.equal(money?.totalAmount, 10000);
   assert.equal(money?.taxAmount, 1300);
   assert.equal(money?.tipAmount, 500);
+});
+
+test("A. gross Square order classifies as a sale", () => {
+  const classified = classifySquareOrderMoney({
+    total_money: { amount: 1100, currency: "CAD" },
+    total_tip_money: { amount: 100, currency: "CAD" },
+    total_tax_money: { amount: 50, currency: "CAD" },
+  });
+  assert.equal(classified.kind, "sale");
+  if (classified.kind === "sale") {
+    assert.equal(classified.money.totalAmount, 1000);
+  }
+});
+
+test("B. lower net_amounts still classifies as original gross sale", () => {
+  const classified = classifySquareOrderMoney({
+    total_money: { amount: 10500, currency: "CAD" },
+    total_tax_money: { amount: 1300, currency: "CAD" },
+    total_tip_money: { amount: 500, currency: "CAD" },
+    net_amounts: { total_money: { amount: 8000, currency: "CAD" } },
+  });
+  assert.equal(classified.kind, "sale");
+  if (classified.kind === "sale") {
+    assert.equal(classified.money.totalAmount, 10000);
+    assert.equal(classified.money.taxAmount, 1300);
+  }
+});
+
+test("C. missing gross total plus negative net is return-only, not a $0 sale", () => {
+  const classified = classifySquareOrderMoney({
+    net_amounts: {
+      total_money: { amount: -1525, currency: "CAD" },
+      tax_money: { amount: -175, currency: "CAD" },
+    },
+  });
+  assert.equal(classified.kind, "return_only");
+  if (classified.kind === "return_only") {
+    assert.equal(classified.netTotal, -1525);
+  }
+  assert.equal(
+    squareOrderSaleMoney({
+      net_amounts: { total_money: { amount: -1525, currency: "CAD" } },
+    }),
+    undefined,
+  );
+});
+
+test("D. missing gross with zero, positive, or unreadable net is invalid order money", () => {
+  assert.equal(
+    classifySquareOrderMoney({
+      net_amounts: { total_money: { amount: 0, currency: "CAD" } },
+    }).kind,
+    "invalid_order_money",
+  );
+  assert.equal(
+    classifySquareOrderMoney({
+      net_amounts: { total_money: { amount: 100, currency: "CAD" } },
+    }).kind,
+    "invalid_order_money",
+  );
+  assert.equal(classifySquareOrderMoney({}).kind, "invalid_order_money");
+  assert.equal(
+    classifySquareOrderMoney({
+      net_amounts: { total_money: { amount: "nope" } },
+    }).kind,
+    "invalid_order_money",
+  );
+});
+
+test("sanitizes return-only order as snapshot evidence with negative net", () => {
+  const sanitized = sanitizeSquareOrder({
+    id: "RET1",
+    location_id: "L1",
+    state: "COMPLETED",
+    created_at: "2026-09-15T12:00:00Z",
+    net_amounts: {
+      total_money: { amount: -1525, currency: "CAD" },
+      tax_money: { amount: -175, currency: "CAD" },
+    },
+  });
+  assert.equal(sanitized?.id, "RET1");
+  assert.equal("total_money" in (sanitized ?? {}), false);
+  assert.deepEqual(sanitized?.net_amounts, {
+    total_money: { amount: -1525, currency: "CAD" },
+    tax_money: { amount: -175, currency: "CAD" },
+  });
 });
 
 test("sanitizes order without customer contact or notes", () => {

@@ -50,7 +50,7 @@ Revenue document. Not a provider “order”.
 
 Provider ids: Square `order.id` → `source_identity` (`square` / `order` / `<id>` → `sale`). FareHarbor has **no** order id; the sale is found via `sale.booking_id` (and later `fareharbor` / `payment` / `<pk>` on payments).
 
-Later mapping: FH `receipt_subtotal` / `receipt_taxes` / `receipt_total`. Square **top-level** order totals excluding tip for original sale economics; Square refunds are separate (`docs/square.md`). Do not use `net_amounts` as canonical sale totals.
+Later mapping: FH `receipt_subtotal` / `receipt_taxes` / `receipt_total`. Square **top-level** order totals excluding tip for original sale economics; Square refunds are separate (`docs/square.md`). Do not use `net_amounts` as canonical sale totals. A Square return-only order is snapshot evidence, not a `sale`.
 
 ## `sale_line_item`
 

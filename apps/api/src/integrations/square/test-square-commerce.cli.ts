@@ -42,6 +42,9 @@ const ORDER_BOUND_IN = "SYN-SQ-COM-ORDER-BOUND-IN";
 const ORDER_BOUND_OUT = "SYN-SQ-COM-ORDER-BOUND-OUT";
 const ORDER_NOUID = "SYN-SQ-COM-ORDER-NOUID";
 const ORDER_GROSS = "SYN-SQ-COM-ORDER-GROSS";
+const ORDER_RETURN_A = "SYN-SQ-COM-ORDER-RETURN-A";
+const ORDER_RETURN_B = "SYN-SQ-COM-ORDER-RETURN-B";
+const ORDER_INVALID_MONEY = "SYN-SQ-COM-ORDER-INVALID-MONEY";
 const PAY_CASH = "SYN-SQ-COM-PAY-CASH";
 const PAY_CARD = "SYN-SQ-COM-PAY-CARD";
 const PAY_EXT = "SYN-SQ-COM-PAY-EXT";
@@ -68,6 +71,9 @@ const ALL_EXTERNAL_IDS = [
   ORDER_BOUND_OUT,
   ORDER_NOUID,
   ORDER_GROSS,
+  ORDER_RETURN_A,
+  ORDER_RETURN_B,
+  ORDER_INVALID_MONEY,
   PAY_CASH,
   PAY_CARD,
   PAY_EXT,
@@ -196,6 +202,9 @@ async function main(): Promise<void> {
           netTax: 1000,
           netTip: 500,
         }),
+        returnOnlyOrder(ORDER_RETURN_A, -1000, -100),
+        returnOnlyOrder(ORDER_RETURN_B, -525, -75),
+        invalidGrossOrder(ORDER_INVALID_MONEY, 0),
       ],
       payments: [
         payment(PAY_CASH, ORDER_A, {
@@ -239,7 +248,7 @@ async function main(): Promise<void> {
         refund(REF_GROSS, PAY_GROSS, ORDER_GROSS, 2000),
       ],
     });
-    if (first.ordersFetched !== 12 || first.paymentsFetched !== 7) {
+    if (first.ordersFetched !== 15 || first.paymentsFetched !== 7) {
       throw new Error("expected synthetic commerce fetch counts");
     }
     if (first.refundsFetched !== 2 || first.snapshotsInserted < 1) {
@@ -257,6 +266,15 @@ async function main(): Promise<void> {
     const firstNorm = await normalizer.normalizeWindow({ date: FARM_DATE });
     if (firstNorm.invalidProcessingFees < 1) {
       throw new Error("net fee credit must be reported, not stored as a fee");
+    }
+    if (firstNorm.sales !== 10) {
+      throw new Error("expected 10 gross sales from valid Square orders");
+    }
+    if (firstNorm.returnOnlyOrdersSkipped !== 2) {
+      throw new Error("expected 2 return-only orders skipped");
+    }
+    if (firstNorm.invalidOrderMoneySkipped !== 1) {
+      throw new Error("expected 1 invalid-order-money skip");
     }
 
     const saleA = await loadSale(database, ORDER_A);
@@ -443,6 +461,24 @@ async function main(): Promise<void> {
     }
     console.log("- original sale totals stay gross; refunds are separate");
 
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_RETURN_A)) {
+      throw new Error("return-only order must not create a canonical sale");
+    }
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_RETURN_B)) {
+      throw new Error("return-only order must not create a canonical sale");
+    }
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_INVALID_MONEY)) {
+      throw new Error("invalid order money must not create a canonical sale");
+    }
+    const returnSnapshots = await countSnapshots(database, [
+      ORDER_RETURN_A,
+      ORDER_RETURN_B,
+    ]);
+    if (returnSnapshots !== 2) {
+      throw new Error("return-only orders must remain as source snapshots");
+    }
+    console.log("- return-only and invalid-money orders do not create sales");
+
     const customer = await database.db
       .select({
         internalEntityType: sourceIdentities.internalEntityType,
@@ -569,6 +605,12 @@ async function main(): Promise<void> {
     if (second.invalidProcessingFees < 1) {
       throw new Error("net fee credit must remain reported on rerun");
     }
+    if (second.returnOnlyOrdersSkipped !== 2 || second.invalidOrderMoneySkipped !== 1) {
+      throw new Error("return-only and invalid-money counters must stay idempotent");
+    }
+    if (second.sales !== 10) {
+      throw new Error("repeated normalize must not turn return-only orders into sales");
+    }
     const saleCount = await countIdentities(database, SQUARE_ORDER_ENTITY, [
       ORDER_A,
       ORDER_EMPTY,
@@ -674,6 +716,41 @@ function order(
       service_charge_money: money(options.netServiceCharge ?? serviceCharge),
     },
     line_items: options.lines,
+  };
+}
+
+function returnOnlyOrder(
+  id: string,
+  netTotal: number,
+  netTax: number,
+): Record<string, unknown> {
+  return {
+    id,
+    location_id: "L1",
+    state: "COMPLETED",
+    created_at: CREATED,
+    updated_at: CREATED,
+    closed_at: CREATED,
+    version: 1,
+    net_amounts: {
+      total_money: money(netTotal),
+      tax_money: money(netTax),
+    },
+  };
+}
+
+function invalidGrossOrder(id: string, netTotal: number): Record<string, unknown> {
+  return {
+    id,
+    location_id: "L1",
+    state: "COMPLETED",
+    created_at: CREATED,
+    updated_at: CREATED,
+    closed_at: CREATED,
+    version: 1,
+    net_amounts: {
+      total_money: money(netTotal),
+    },
   };
 }
 
@@ -900,6 +977,23 @@ async function countIdentities(
       ),
     );
   return rows.filter((row) => row.internalEntityId).length;
+}
+
+async function countSnapshots(
+  database: DatabaseService,
+  externalIds: string[],
+): Promise<number> {
+  const rows = await database.db
+    .select({ id: sourceSnapshots.id })
+    .from(sourceSnapshots)
+    .where(
+      and(
+        eq(sourceSnapshots.provider, SQUARE_PROVIDER),
+        eq(sourceSnapshots.entityType, SQUARE_ORDER_ENTITY),
+        inArray(sourceSnapshots.externalId, externalIds),
+      ),
+    );
+  return rows.length;
 }
 
 async function resolvedId(

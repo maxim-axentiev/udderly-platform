@@ -195,7 +195,15 @@ Sanitized refund fields: `id`, `payment_id`, `order_id`, `location_id`, `status`
 | refund.id | `square` / `refund` / id | `refund` |
 | customer.id | `square` / `customer` / id | unresolved (`internal_*` null) |
 
-A Square order may create a sale with **zero** line items. Do not invent a fake line. `sale` is not `payment`. Refunds are not negative payments.
+A Square **order is not automatically a canonical sale**.
+
+- Original/gross order (usable top-level `total_money`) → `sale`. Zero line items is still a sale if gross money is present. Do not invent a fake line.
+- Return-only order (no usable top-level `total_money`, `net_amounts.total_money` < 0) → **not** a sale. Keep the `source_snapshot`. Do not create a $0 or negative sale. Do not abs the net amount.
+- Other missing/unusable gross money → skip as invalid/unrepresentable order money and count it. Do not treat it as return-only.
+
+`sale` is not `payment`. Refunds are not negative payments. A Square **refund** still creates a canonical `refund` even when a related return-only order is skipped.
+
+Ordinary normalize does not delete legacy sales that were incorrectly created from return-only orders.
 
 ### Money
 
@@ -214,6 +222,8 @@ Canonical Square **sale** fields are original/gross order economics from **top-l
 | `refund.amount` | `amount_money` (positive) |
 
 `net_amounts` is post-return/net provider evidence. It is stored on the snapshot but **must not** set canonical sale fields. Using `net_amounts` as the sale total plus recording refunds would count returns twice.
+
+Square return-only orders (no usable top-level `total_money`, negative `net_amounts.total_money`) stay as snapshot evidence only. Canonical refunds come from the Refunds API, not from abs(net) or a $0 sale.
 
 Reporting:
 
@@ -247,7 +257,7 @@ No PERSON. `customer_id` becomes unresolved `source_identity`. No Instant Profil
 
 One transaction per order (sale + current lines + identities). One transaction per payment. One transaction per refund. Newest snapshot (`observed_at`, then `updated_at`, then `version`) wins; older apply is `skipped_stale`. Unchanged sanitized payloads do not insert extra snapshots.
 
-Normalize order: latest orders in the farm window, then payments, then refunds.
+Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Return-only orders skipped` and `Invalid order money skipped` separately. Ordinary normalize does not delete previously created sales.
 
 Synthetic tests (no live Square API):
 

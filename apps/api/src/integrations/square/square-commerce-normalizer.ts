@@ -10,7 +10,12 @@ import {
 } from "../../database/schema/commerce";
 import { sourceIdentities } from "../../database/schema/source-identity";
 import { sourceSnapshots } from "../../database/schema/source-snapshots";
-import { moneyAmount, moneyCurrency, netProcessingFeeCost, squareOrderSaleMoney } from "./square.commerce.money";
+import {
+  classifySquareOrderMoney,
+  moneyAmount,
+  moneyCurrency,
+  netProcessingFeeCost,
+} from "./square.commerce.money";
 import { orderLineExternalId } from "./square.commerce.line";
 import {
   squareOrderStatus,
@@ -48,6 +53,8 @@ export type SquareCommerceApplyResult =
       invalidProcessingFee?: boolean;
     }
   | { outcome: "skipped_stale" }
+  | { outcome: "skipped_return_only" }
+  | { outcome: "skipped_invalid_order_money" }
   | { outcome: "unresolved_payment" }
   | { outcome: "unresolved_refund" }
   | { outcome: "skipped"; reason: "invalid_payload" | "not_found" };
@@ -147,10 +154,14 @@ export class SquareCommerceNormalizer {
     db: SquareCommerceDb,
     snapshot: { externalId: string; payload: Record<string, unknown> },
   ): Promise<SquareCommerceApplyResult> {
-    const money = squareOrderSaleMoney(snapshot.payload);
-    if (!money) {
-      return { outcome: "skipped", reason: "invalid_payload" };
+    const classified = classifySquareOrderMoney(snapshot.payload);
+    if (classified.kind === "return_only") {
+      return { outcome: "skipped_return_only" };
     }
+    if (classified.kind === "invalid_order_money") {
+      return { outcome: "skipped_invalid_order_money" };
+    }
+    const money = classified.money;
 
     const status = squareOrderStatus(snapshot.payload.state);
     const source = nestedObject(snapshot.payload.source);

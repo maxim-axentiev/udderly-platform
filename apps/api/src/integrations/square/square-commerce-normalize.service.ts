@@ -26,6 +26,8 @@ export type SquareCommerceNormalizeSummary = {
   unresolvedRefunds: number;
   skippedStale: number;
   invalidProcessingFees: number;
+  returnOnlyOrdersSkipped: number;
+  invalidOrderMoneySkipped: number;
 };
 
 type LatestSnapshot = {
@@ -67,6 +69,8 @@ export class SquareCommerceNormalizeService {
       unresolvedRefunds: 0,
       skippedStale: 0,
       invalidProcessingFees: 0,
+      returnOnlyOrdersSkipped: 0,
+      invalidOrderMoneySkipped: 0,
     };
 
     for (const snapshot of orders) {
@@ -77,6 +81,10 @@ export class SquareCommerceNormalizeService {
         summary.sales += 1;
         summary.lineItems += result.lineItems ?? 0;
         summary.unresolvedCatalogLines += result.unresolvedCatalogLines ?? 0;
+      } else if (result.outcome === "skipped_return_only") {
+        summary.returnOnlyOrdersSkipped += 1;
+      } else if (result.outcome === "skipped_invalid_order_money") {
+        summary.invalidOrderMoneySkipped += 1;
       } else if (result.outcome === "skipped_stale") {
         summary.skippedStale += 1;
       }
