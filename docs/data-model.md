@@ -339,9 +339,9 @@ The webhook exposes one receipt (`receipt_subtotal` / `receipt_taxes` / `receipt
 
 ### `sale_line_item`
 
-**Fields:** `sale_id`; `product_id` / `product_variation_id` / `experience_id` nullable; `description` snapshot; `quantity` `numeric(12,4)` (Square quantities are decimal strings; integer is not sufficient); `currency`; `gross_amount`, `discount_amount`, `tax_amount`, `total_amount`.
+**Fields:** `sale_id`; `product_id` / `product_variation_id` / `experience_id` nullable; `description` snapshot; `quantity` `numeric(12,4)` (Square quantities are decimal strings; integer is not sufficient); `currency`; `gross_amount`, `discount_amount`, `tax_amount`, `total_amount`; Square current-set lifecycle `is_active`, `last_seen_at`, `removed_at`.
 
-Do not require a catalog mapping. Do not copy Square line `note` (possible PII). Preserve explicit provider discount amounts; do not infer discount only from subtotal−total arithmetic.
+Do not require a catalog mapping. Do not copy Square line `note` (possible PII). Preserve explicit provider discount amounts; do not infer discount only from subtotal−total arithmetic. An order with zero line items still has a `sale`. Lines dropped from a later Square order stay as inactive history.
 
 **PII:** no (product names are business data).
 

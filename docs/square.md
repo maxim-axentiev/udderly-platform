@@ -1,8 +1,8 @@
 # Square integration
 
-Read-only production connection and data audit only. Square is intended as the future source for physical farm-store transactions and retail activity. This repository does **not** ingest Square orders, payments, customers, refunds, or sales yet. Catalog import/normalize is manual.
+Read-only production connection. Square is the source for physical farm-store catalog and retail commerce. Catalog and commerce ingest are **manual two-step** commands (snapshot, then normalize). There is no Square webhook receiver and no recurring poller.
 
-There is no Square webhook receiver and no recurring sync job.
+This repository does **not** ingest Square customers as people. Instant Profile `customer_id` may be stored as an unresolved `source_identity` only.
 
 ## Environment variables
 
@@ -157,4 +157,92 @@ Synthetic tests (no live Square API):
 
 ```
 npm run test:square-catalog
+```
+
+## Manual commerce import
+
+Farm calendar dates are `America/Toronto`. Production commands run compiled dist JS:
+
+```
+npm run import:square-commerce -- --date 2026-09-15
+npm run normalize:square-commerce -- --date 2026-09-15
+```
+
+Also `--from YYYY-MM-DD --to YYYY-MM-DD` (inclusive). `:dev` variants use `tsx`. Import writes sanitized `source_snapshot` rows only. Normalize is a separate command. Fetch uses the existing location id and follows Square cursors until omitted.
+
+`--date 2026-09-15` for **orders** means Square `closed_at` in that America/Toronto farm day (half-open UTC). That matches `sale.occurred_at` (`closed_at` when present). SearchOrders uses `date_time_filter.closed_at` (Square allows only one of created_at / updated_at / closed_at per request). COMPLETED and CANCELED orders that closed that day are included, even if `created_at` was earlier. An order created that day but closed the next day is **not** a sale for `--date`. OPEN/DRAFT orders typically have no `closed_at` and are **not** fetched by this command; they are not mixed into historical closed-sale reporting.
+
+Payments and refunds are still selected by their own ListPayments/ListRefunds `begin_time`/`end_time` (`created_at`). Normalize uses the same split: orders by snapshot `closed_at`, payments/refunds by `created_at`.
+
+### Snapshots
+
+`provider = square`. `entity_type` is `order`, `payment`, or `refund`. `external_id` is the Square id. Identical sanitized JSON reuses `(provider, entity_type, external_id, payload_hash)`.
+
+Sanitized order fields: `id`, `location_id`, `state`, `created_at`, `updated_at`, `closed_at`, `version`, `customer_id` (unresolved evidence only), `source.name`/`type`, `net_amounts` money parts, top-level total money fallbacks, `line_items` (uid, catalog ids/version, names, quantity, money parts, modifier name/price only), `tenders` (`id`, `type`, `payment_id` only). No notes, fulfillments, or customer contact.
+
+Sanitized payment fields: `id`, `order_id`, `location_id`, `status`, timestamps, `customer_id`, `source_type`, `amount_money`, `total_money`, `tip_money`, `refunded_money`, `approved_money`, signed `processing_fee[]` (`type`, `effective_at`, `amount_money`). Derived `processing_fee_amount` is the nonnegative **net** cost when valid. A net Square credit is stored as `processing_fee_invalid = net_credit` and is reported, not clamped. No card PAN/last4/fingerprint, cardholder name, receipt URLs, billing address, email, or phone.
+
+Sanitized refund fields: `id`, `payment_id`, `order_id`, `location_id`, `status`, `amount_money`, timestamps. No reason text.
+
+### Canonical mapping
+
+| Square | `source_identity` | Canonical |
+| --- | --- | --- |
+| order.id | `square` / `order` / id | `sale` (`kind=retail`) |
+| order line uid | `square` / `order_line` / `<order.id>:<uid>` | `sale_line_item` |
+| order line without uid | `square` / `order_line` / `<order.id>:version:<order.version>:pos:<index>` | `sale_line_item` |
+| payment.id | `square` / `payment` / id | `payment` |
+| refund.id | `square` / `refund` / id | `refund` |
+| customer.id | `square` / `customer` / id | unresolved (`internal_*` null) |
+
+A Square order may create a sale with **zero** line items. Do not invent a fake line. `sale` is not `payment`. Refunds are not negative payments.
+
+### Money
+
+Prefer `order.net_amounts` (Orders API). All integers, minor units, plus ISO currency.
+
+| Canonical | Square |
+| --- | --- |
+| `sale.discount_amount` | `net_amounts.discount_money` |
+| `sale.tax_amount` | `net_amounts.tax_money` |
+| `sale.service_charge_amount` | `net_amounts.service_charge_money` |
+| `sale.total_amount` | `net_amounts.total_money` **minus** explicit `net_amounts.tip_money` once |
+| `sale.subtotal_amount` | `total_amount - tax - service_charge + discount` (Square has no separate order subtotal) |
+| `payment.amount` | `amount_money` (excludes tip; not `total_money`) |
+| `payment.tip_amount` | `tip_money` |
+| `payment.processing_fee_amount` | `-sum(processing_fee[].amount_money.amount)` when that sum is ≤ 0. Square INITIAL fees are typically negative (money taken from the merchant); ADJUSTMENT entries can be positive reversals. Do **not** sum absolute values. A positive net signed sum is a net credit: reported as invalid, `processing_fee_amount` left null. |
+| `refund.amount` | `amount_money` (positive) |
+
+If `net_amounts` is missing, the same fields on the order (`total_money`, `total_tip_money`, …) are used. Tip is never guessed. Processing fees never change `sale.total_amount`. Refunds never change `sale.total_amount`.
+
+### Order status
+
+Provider `state` is stored lowercased (`COMPLETED` → `completed`, `CANCELED` → `canceled`). Canceled orders are retained. Reporting chooses whether to include them. They are not treated as revenue by this ingest.
+
+### Line items
+
+`catalog_object_id` resolves `square` / `item_variation` / id → `product_variation` → `product`. Missing or unknown catalog ids leave product FKs null; the line still exists. Quantity is Square’s decimal string. Identity is order id + Square line `uid`. Lines without uid use `<order.id>:version:<order.version>:pos:<index>` so a later version cannot reuse an older positional identity. Description is not identity.
+
+The latest order payload is the current line set. Lines no longer present are `is_active=false` with `removed_at` set (`0007_sale_line_item_lifecycle`; `0006` untouched).
+
+### Payments and refunds
+
+Payments resolve sale by exact `order_id`. Unresolved payments do not invent a sale. `source_type` maps `CARD`/`CASH`/`EXTERNAL` → `card`/`cash`/`external`; anything else explicit → `other`. EXTERNAL is a tender type, not unpaid.
+
+Refunds resolve `payment_id` first (copy that payment’s `sale_id`), else exact `order_id`. Amounts stay positive.
+
+### Customers
+
+No PERSON. `customer_id` becomes unresolved `source_identity`. No Instant Profile matching against FareHarbor/Wherewolf.
+
+### Transactions and idempotency
+
+One transaction per order (sale + current lines + identities). One transaction per payment. One transaction per refund. Newest snapshot (`observed_at`, then `updated_at`, then `version`) wins; older apply is `skipped_stale`. Unchanged sanitized payloads do not insert extra snapshots.
+
+Normalize order: latest orders in the farm window, then payments, then refunds.
+
+Synthetic tests (no live Square API):
+
+```
+npm run test:square-commerce
 ```

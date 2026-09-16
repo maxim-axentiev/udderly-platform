@@ -50,6 +50,13 @@
       "when": 1789503000000,
       "tag": "0006_commerce",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1789504000000,
+      "tag": "0007_sale_line_item_lifecycle",
+      "breakpoints": true
     }
   ]
 }

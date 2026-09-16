@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -174,6 +175,8 @@ export const sales = pgTable(
 /**
  * What was sold. Product FKs are optional: historical lines may lack a catalog map.
  * Quantity is numeric because Square sends decimal quantity strings (not integers only).
+ * Square order updates sync the current line set: `is_active` / `last_seen_at` / `removed_at`.
+ * Removed lines stay for history and are not counted as current sale lines.
  */
 export const saleLineItems = pgTable(
   "sale_line_item",
@@ -190,11 +193,15 @@ export const saleLineItems = pgTable(
     discountAmount: integer("discount_amount").notNull().default(0),
     taxAmount: integer("tax_amount").notNull().default(0),
     totalAmount: integer("total_amount").notNull(),
+    isActive: boolean("is_active").notNull().default(true),
+    lastSeenAt: timestamptz("last_seen_at").notNull().defaultNow(),
+    removedAt: timestamptz("removed_at"),
     createdAt,
     updatedAt,
   },
   (table) => [
     index("sale_line_item_sale_idx").on(table.saleId),
+    index("sale_line_item_sale_active_idx").on(table.saleId, table.isActive),
     index("sale_line_item_product_idx").on(table.productId),
     index("sale_line_item_product_variation_idx").on(table.productVariationId),
     foreignKey({

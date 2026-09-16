@@ -18,6 +18,11 @@ export const SQUARE_PROVIDER = "square";
 export const SQUARE_CATEGORY_ENTITY = "category";
 export const SQUARE_ITEM_ENTITY = "item";
 export const SQUARE_ITEM_VARIATION_ENTITY = "item_variation";
+export const SQUARE_ORDER_ENTITY = "order";
+export const SQUARE_PAYMENT_ENTITY = "payment";
+export const SQUARE_REFUND_ENTITY = "refund";
+export const SQUARE_ORDER_LINE_ENTITY = "order_line";
+export const SQUARE_CUSTOMER_ENTITY = "customer";
 export const SQUARE_CATALOG_TYPES = [
   "CATEGORY",
   "ITEM",
@@ -27,6 +32,16 @@ export const SQUARE_CATALOG_TYPES = [
 export const INTERNAL_PRODUCT_CATEGORY = "product_category";
 export const INTERNAL_PRODUCT = "product";
 export const INTERNAL_PRODUCT_VARIATION = "product_variation";
+export const INTERNAL_SALE = "sale";
+export const INTERNAL_SALE_LINE_ITEM = "sale_line_item";
+export const INTERNAL_PAYMENT = "payment";
+export const INTERNAL_REFUND = "refund";
+
+export const SQUARE_SALE_KIND_RETAIL = "retail";
+export const SQUARE_METHOD_CARD = "card";
+export const SQUARE_METHOD_CASH = "cash";
+export const SQUARE_METHOD_EXTERNAL = "external";
+export const SQUARE_METHOD_OTHER = "other";
 
 export const SQUARE_STATUS_ACTIVE = "active";
 export const SQUARE_STATUS_ARCHIVED = "archived";

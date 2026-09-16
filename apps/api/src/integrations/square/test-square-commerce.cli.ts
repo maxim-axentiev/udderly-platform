@@ -1,0 +1,947 @@
+import { NestFactory } from "@nestjs/core";
+import { and, eq, inArray, like, or } from "drizzle-orm";
+import { AppModule } from "../../app.module";
+import { loadEnvFiles } from "../../config/load-env";
+import { DatabaseService } from "../../database/database.service";
+import {
+  payments,
+  products,
+  productVariations,
+  refunds,
+  saleLineItems,
+  sales,
+} from "../../database/schema/commerce";
+import { sourceIdentities } from "../../database/schema/source-identity";
+import { sourceSnapshots } from "../../database/schema/source-snapshots";
+import { SquareCommerceImportService } from "./square-commerce-import.service";
+import { SquareCommerceNormalizeService } from "./square-commerce-normalize.service";
+import {
+  INTERNAL_PRODUCT,
+  INTERNAL_PRODUCT_VARIATION,
+  SQUARE_CUSTOMER_ENTITY,
+  SQUARE_ITEM_ENTITY,
+  SQUARE_ITEM_VARIATION_ENTITY,
+  SQUARE_ORDER_ENTITY,
+  SQUARE_ORDER_LINE_ENTITY,
+  SQUARE_PAYMENT_ENTITY,
+  SQUARE_PROVIDER,
+  SQUARE_REFUND_ENTITY,
+} from "./square.constants";
+
+const FARM_DATE = "2026-09-15";
+const CREATED = "2026-09-15T16:00:00.000Z";
+const ORDER_A = "SYN-SQ-COM-ORDER-A";
+const ORDER_EMPTY = "SYN-SQ-COM-ORDER-EMPTY";
+const ORDER_CANCELED = "SYN-SQ-COM-ORDER-CANCELED";
+const ORDER_LINES = "SYN-SQ-COM-ORDER-LINES";
+const ORDER_STALE = "SYN-SQ-COM-ORDER-STALE";
+const ORDER_TIP = "SYN-SQ-COM-ORDER-TIP";
+const ORDER_CLOSED_TODAY = "SYN-SQ-COM-ORDER-CLOSED-TODAY";
+const ORDER_CLOSED_TOMORROW = "SYN-SQ-COM-ORDER-CLOSED-TOMORROW";
+const ORDER_BOUND_IN = "SYN-SQ-COM-ORDER-BOUND-IN";
+const ORDER_BOUND_OUT = "SYN-SQ-COM-ORDER-BOUND-OUT";
+const ORDER_NOUID = "SYN-SQ-COM-ORDER-NOUID";
+const PAY_CASH = "SYN-SQ-COM-PAY-CASH";
+const PAY_CARD = "SYN-SQ-COM-PAY-CARD";
+const PAY_EXT = "SYN-SQ-COM-PAY-EXT";
+const PAY_ORPHAN = "SYN-SQ-COM-PAY-ORPHAN";
+const PAY_TIP = "SYN-SQ-COM-PAY-TIP";
+const REF_A = "SYN-SQ-COM-REF-A";
+const CUST = "SYN-SQ-COM-CUST";
+const VAR = "SYN-SQ-COM-VAR";
+const ITEM = "SYN-SQ-COM-ITEM";
+
+const ALL_EXTERNAL_IDS = [
+  ORDER_A,
+  ORDER_EMPTY,
+  ORDER_CANCELED,
+  ORDER_LINES,
+  ORDER_STALE,
+  ORDER_TIP,
+  ORDER_CLOSED_TODAY,
+  ORDER_CLOSED_TOMORROW,
+  ORDER_BOUND_IN,
+  ORDER_BOUND_OUT,
+  ORDER_NOUID,
+  PAY_CASH,
+  PAY_CARD,
+  PAY_EXT,
+  PAY_ORPHAN,
+  PAY_TIP,
+  REF_A,
+  CUST,
+  VAR,
+  ITEM,
+  `${ORDER_LINES}:L1`,
+  `${ORDER_LINES}:L2`,
+  `${ORDER_LINES}:L3`,
+  `${ORDER_TIP}:L1`,
+];
+
+async function main(): Promise<void> {
+  loadEnvFiles();
+  const app = await NestFactory.createApplicationContext(AppModule, {
+    logger: ["error", "warn"],
+  });
+  const database = app.get(DatabaseService);
+  const importer = app.get(SquareCommerceImportService);
+  const normalizer = app.get(SquareCommerceNormalizeService);
+
+  try {
+    await cleanup(database);
+    await seedCatalog(database);
+
+    const first = await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_A, {
+          customerId: CUST,
+          total: 500,
+          tax: 25,
+          discount: 50,
+          serviceCharge: 10,
+          tip: 0,
+          source: "Point of Sale",
+          lines: [
+            line("L1", {
+              name: "Gouda",
+              variationName: "Each",
+              catalogObjectId: VAR,
+              quantity: "1.5",
+              gross: 500,
+              discount: 50,
+              tax: 25,
+              total: 475,
+            }),
+          ],
+        }),
+        order(ORDER_EMPTY, { total: 0, lines: [] }),
+        order(ORDER_CANCELED, { state: "CANCELED", total: 200 }),
+        order(ORDER_LINES, {
+          total: 800,
+          lines: [
+            line("L1", {
+              name: "Milk",
+              catalogObjectId: VAR,
+              quantity: "1",
+              gross: 400,
+              total: 400,
+            }),
+            line("L2", {
+              name: "Custom",
+              quantity: "1",
+              gross: 400,
+              total: 400,
+            }),
+          ],
+        }),
+        order(ORDER_STALE, { total: 100, version: 1 }),
+        order(ORDER_TIP, {
+          total: 1100,
+          tax: 50,
+          discount: 100,
+          serviceCharge: 25,
+          tip: 100,
+          lines: [
+            line("L1", {
+              name: "Ice Cream",
+              quantity: "1",
+              gross: 1025,
+              discount: 100,
+              tax: 50,
+              total: 1000,
+            }),
+          ],
+        }),
+        order(ORDER_CLOSED_TODAY, {
+          total: 150,
+          createdAt: "2026-09-14T16:00:00.000Z",
+          closedAt: CREATED,
+        }),
+        order(ORDER_CLOSED_TOMORROW, {
+          total: 175,
+          createdAt: CREATED,
+          closedAt: "2026-09-16T16:00:00.000Z",
+        }),
+        order(ORDER_BOUND_IN, {
+          total: 10,
+          createdAt: "2026-09-15T03:00:00.000Z",
+          closedAt: "2026-09-15T04:00:00.000Z",
+        }),
+        order(ORDER_BOUND_OUT, {
+          total: 11,
+          createdAt: "2026-09-15T03:00:00.000Z",
+          closedAt: "2026-09-15T03:59:59.000Z",
+        }),
+        order(ORDER_NOUID, {
+          total: 80,
+          version: 1,
+          lines: [
+            line(undefined, { name: "Alpha", quantity: "1", gross: 40, total: 40 }),
+            line(undefined, { name: "Beta", quantity: "1", gross: 40, total: 40 }),
+          ],
+        }),
+      ],
+      payments: [
+        payment(PAY_CASH, ORDER_A, {
+          amount: 500,
+          method: "CASH",
+        }),
+        payment(PAY_CARD, ORDER_EMPTY, {
+          amount: 0,
+          method: "CARD",
+        }),
+        payment(PAY_EXT, ORDER_CANCELED, {
+          amount: 200,
+          method: "EXTERNAL",
+        }),
+        payment(PAY_ORPHAN, "SYN-SQ-COM-MISSING-ORDER", {
+          amount: 50,
+          method: "CARD",
+        }),
+        payment(PAY_TIP, ORDER_TIP, {
+          amount: 1000,
+          tip: 100,
+          fee: -30,
+          method: "CARD",
+        }),
+      ],
+      refunds: [
+        refund(REF_A, PAY_CASH, ORDER_A, 200),
+      ],
+    });
+    if (first.ordersFetched !== 11 || first.paymentsFetched !== 5) {
+      throw new Error("expected synthetic commerce fetch counts");
+    }
+    if (first.refundsFetched !== 1 || first.snapshotsInserted < 1) {
+      throw new Error("expected refund snapshot");
+    }
+
+    const again = await importer.persistCommerceObjects({
+      orders: [order(ORDER_EMPTY, { total: 0, lines: [] })],
+    });
+    if (again.snapshotsInserted !== 0 || again.snapshotsUnchanged < 1) {
+      throw new Error("unchanged import must reuse snapshots");
+    }
+    console.log("- unchanged import does not duplicate snapshots");
+
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+
+    const saleA = await loadSale(database, ORDER_A);
+    if (saleA.kind !== "retail" || saleA.status !== "completed") {
+      throw new Error("order did not create one retail sale");
+    }
+    if (saleA.discountAmount !== 50 || saleA.taxAmount !== 25) {
+      throw new Error("explicit discount/tax mapping failed");
+    }
+    if (saleA.serviceChargeAmount !== 10) {
+      throw new Error("service charge mapping failed");
+    }
+    const saleAAgain = await loadSale(database, ORDER_A);
+    if (saleAAgain.id !== saleA.id) {
+      throw new Error("repeat order normalize is not idempotent");
+    }
+    console.log("- order creates one sale and is idempotent");
+
+    const empty = await loadSale(database, ORDER_EMPTY);
+    const emptyLines = await listLines(database, empty.id);
+    if (emptyLines.length !== 0) {
+      throw new Error("empty order must still create a sale without lines");
+    }
+    console.log("- order with no line items still creates a sale");
+
+    const canceled = await loadSale(database, ORDER_CANCELED);
+    if (canceled.status !== "canceled") {
+      throw new Error("canceled order must remain stored");
+    }
+    console.log("- canceled closed order is imported");
+
+    await loadSale(database, ORDER_CLOSED_TODAY);
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_CLOSED_TOMORROW)) {
+      throw new Error("order closed the following day must not be a sale on the requested day");
+    }
+    await loadSale(database, ORDER_BOUND_IN);
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_BOUND_OUT)) {
+      throw new Error("Toronto day-boundary order closed before local midnight must be excluded");
+    }
+    console.log("- closed_at farm-day membership, including Toronto midnight");
+
+    const resolvedLine = (await listLines(database, saleA.id)).find(
+      (row) => row.isActive,
+    );
+    if (!resolvedLine?.productVariationId || !resolvedLine.productId) {
+      throw new Error("catalog line must resolve variation and product");
+    }
+    if (Number(resolvedLine.quantity) !== 1.5) {
+      throw new Error("decimal quantity must be stored");
+    }
+
+    const linesSale = await loadSale(database, ORDER_LINES);
+    const lines = await listLines(database, linesSale.id);
+    const custom = lines.find((row) => row.description === "Custom");
+    if (!custom || custom.productId || custom.productVariationId) {
+      throw new Error("line without catalog id must remain valid and unmapped");
+    }
+    console.log("- catalog resolution, missing catalog id, and decimal qty");
+
+    const noUidSale = await loadSale(database, ORDER_NOUID);
+    const noUidFirst = await listLines(database, noUidSale.id);
+    const firstAlpha = noUidFirst.find((row) => row.description === "Alpha" && row.isActive);
+    const firstBeta = noUidFirst.find((row) => row.description === "Beta" && row.isActive);
+    if (!firstAlpha || !firstBeta) {
+      throw new Error("no-uid lines must create on first version");
+    }
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_NOUID, {
+          total: 80,
+          version: 1,
+          lines: [
+            line(undefined, { name: "Alpha", quantity: "1", gross: 40, total: 40 }),
+            line(undefined, { name: "Beta", quantity: "1", gross: 40, total: 40 }),
+          ],
+        }),
+      ],
+    });
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const noUidRepeat = await listLines(database, noUidSale.id);
+    const repeatAlpha = noUidRepeat.find((row) => row.description === "Alpha" && row.isActive);
+    if (!repeatAlpha || repeatAlpha.id !== firstAlpha.id) {
+      throw new Error("same-version no-uid line must stay idempotent");
+    }
+
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_NOUID, {
+          total: 80,
+          version: 2,
+          updatedAt: "2026-09-15T18:30:00.000Z",
+          lines: [
+            line(undefined, { name: "Beta", quantity: "1", gross: 40, total: 40 }),
+            line(undefined, { name: "Alpha", quantity: "1", gross: 40, total: 40 }),
+          ],
+        }),
+      ],
+    });
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const swapped = await listLines(database, noUidSale.id);
+    const activeSwapped = swapped.filter((row) => row.isActive);
+    const inactiveSwapped = swapped.filter((row) => !row.isActive);
+    if (activeSwapped.length !== 2 || inactiveSwapped.length !== 2) {
+      throw new Error("swapped no-uid lines must inactivate old version identities");
+    }
+    if (inactiveSwapped.some((row) => row.id === firstAlpha.id) === false) {
+      throw new Error("old no-uid line must become inactive rather than rewritten");
+    }
+    const newAlpha = activeSwapped.find((row) => row.description === "Alpha");
+    if (!newAlpha || newAlpha.id === firstAlpha.id) {
+      throw new Error("position swap must not reuse the previous version line identity");
+    }
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_NOUID, {
+          total: 80,
+          version: 2,
+          updatedAt: "2026-09-15T18:30:00.000Z",
+          lines: [
+            line(undefined, { name: "Beta", quantity: "1", gross: 40, total: 40 }),
+            line(undefined, { name: "Alpha", quantity: "1", gross: 40, total: 40 }),
+          ],
+        }),
+      ],
+    });
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const swappedAgain = await listLines(database, noUidSale.id);
+    const stillAlpha = swappedAgain.find((row) => row.description === "Alpha" && row.isActive);
+    if (!stillAlpha || stillAlpha.id !== newAlpha.id) {
+      throw new Error("newest no-uid version must remain idempotent");
+    }
+    console.log("- no-uid lines are version-scoped and do not rewrite on position swap");
+
+    const tipSale = await loadSale(database, ORDER_TIP);
+    if (tipSale.totalAmount !== 1000) {
+      throw new Error("tip must be excluded from sale total");
+    }
+    const tipPay = await loadPayment(database, PAY_TIP);
+    if (tipPay.tipAmount !== 100 || tipPay.amount !== 1000) {
+      throw new Error("payment tip must stay separate");
+    }
+    if (tipPay.processingFeeAmount !== 30) {
+      throw new Error("processing fee must be stored separately as a positive cost");
+    }
+    console.log("- tip excluded from sale; fee stored on payment");
+
+    const cash = await loadPayment(database, PAY_CASH);
+    const card = await loadPayment(database, PAY_CARD);
+    const external = await loadPayment(database, PAY_EXT);
+    if (cash.method !== "cash" || card.method !== "card" || external.method !== "external") {
+      throw new Error("payment method mapping failed");
+    }
+    if (cash.saleId !== saleA.id) {
+      throw new Error("payment must resolve the exact order sale");
+    }
+    if (await resolvedId(database, SQUARE_PAYMENT_ENTITY, PAY_ORPHAN)) {
+      throw new Error("unresolved payment must not invent a sale");
+    }
+    console.log("- cash/card/external methods; unresolved payment writes nothing");
+
+    const refundRow = await loadRefund(database, REF_A);
+    if (refundRow.paymentId !== cash.id || refundRow.saleId !== saleA.id) {
+      throw new Error("refund must resolve payment and sale");
+    }
+    if (refundRow.amount !== 200) {
+      throw new Error("refund amount must stay positive");
+    }
+    console.log("- refund resolves payment + sale with a positive amount");
+
+    const customer = await database.db
+      .select({
+        internalEntityType: sourceIdentities.internalEntityType,
+        internalEntityId: sourceIdentities.internalEntityId,
+      })
+      .from(sourceIdentities)
+      .where(
+        and(
+          eq(sourceIdentities.provider, SQUARE_PROVIDER),
+          eq(sourceIdentities.entityType, SQUARE_CUSTOMER_ENTITY),
+          eq(sourceIdentities.externalId, CUST),
+        ),
+      )
+      .limit(1);
+    if (!customer[0] || customer[0].internalEntityId) {
+      throw new Error("customer id must stay unresolved and not create PERSON");
+    }
+    console.log("- customer id does not create PERSON");
+
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_A, {
+          customerId: CUST,
+          total: 600,
+          tax: 25,
+          discount: 50,
+          serviceCharge: 10,
+          tip: 0,
+          version: 2,
+          updatedAt: "2026-09-15T18:00:00.000Z",
+          source: "Point of Sale",
+          lines: [
+            line("L1", {
+              name: "Gouda",
+              variationName: "Each",
+              catalogObjectId: VAR,
+              quantity: "1.5",
+              gross: 600,
+              discount: 50,
+              tax: 25,
+              total: 575,
+            }),
+          ],
+        }),
+      ],
+    });
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const updated = await loadSale(database, ORDER_A);
+    if (updated.id !== saleA.id || updated.totalAmount !== 600) {
+      throw new Error("changed order must update the same sale");
+    }
+    console.log("- changed order updates the same sale");
+
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_LINES, {
+          total: 400,
+          version: 2,
+          updatedAt: "2026-09-15T18:00:00.000Z",
+          lines: [
+            line("L1", {
+              name: "Milk",
+              catalogObjectId: VAR,
+              quantity: "1",
+              gross: 400,
+              total: 400,
+            }),
+          ],
+        }),
+      ],
+    });
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const afterRemoval = await listLines(database, linesSale.id);
+    const active = afterRemoval.filter((row) => row.isActive);
+    const removed = afterRemoval.filter((row) => !row.isActive);
+    if (active.length !== 1 || removed.length !== 1) {
+      throw new Error("removed line must be inactive, not deleted");
+    }
+    console.log("- removed line does not remain current");
+
+    const staleRows = await database.db
+      .select({
+        id: sourceSnapshots.id,
+        observedAt: sourceSnapshots.observedAt,
+      })
+      .from(sourceSnapshots)
+      .where(
+        and(
+          eq(sourceSnapshots.provider, SQUARE_PROVIDER),
+          eq(sourceSnapshots.entityType, SQUARE_ORDER_ENTITY),
+          eq(sourceSnapshots.externalId, ORDER_STALE),
+        ),
+      );
+    const oldest = staleRows.sort(
+      (left, right) => left.observedAt.getTime() - right.observedAt.getTime(),
+    )[0];
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_STALE, {
+          total: 999,
+          version: 2,
+          updatedAt: "2026-09-15T19:00:00.000Z",
+        }),
+      ],
+    });
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+    if (!oldest) {
+      throw new Error("stale snapshot missing");
+    }
+    const staleApply = await normalizer.applySnapshot(oldest.id);
+    if (staleApply.outcome !== "skipped_stale") {
+      throw new Error("older snapshot must not roll newer state backward");
+    }
+    const staleSale = await loadSale(database, ORDER_STALE);
+    if (staleSale.totalAmount !== 999) {
+      throw new Error("canonical sale was rolled back");
+    }
+    console.log("- older snapshot cannot roll newer state backward");
+
+    const second = await normalizer.normalizeWindow({ date: FARM_DATE });
+    if (second.unresolvedPayments < 1) {
+      throw new Error("expected unresolved orphan payment to remain counted");
+    }
+    const saleCount = await countIdentities(database, SQUARE_ORDER_ENTITY, [
+      ORDER_A,
+      ORDER_EMPTY,
+      ORDER_CANCELED,
+      ORDER_LINES,
+      ORDER_STALE,
+      ORDER_TIP,
+      ORDER_CLOSED_TODAY,
+      ORDER_BOUND_IN,
+      ORDER_NOUID,
+    ]);
+    if (saleCount !== 9) {
+      throw new Error("idempotent normalize created extra sales");
+    }
+    console.log("- repeated normalize does not duplicate commerce rows");
+
+    await cleanup(database);
+    console.log("");
+    console.log("Square commerce tests passed.");
+  } finally {
+    await app.close();
+  }
+}
+
+function money(amount: number): { amount: number; currency: string } {
+  return { amount, currency: "CAD" };
+}
+
+function line(
+  uid: string | undefined,
+  options: {
+    name: string;
+    variationName?: string;
+    catalogObjectId?: string;
+    quantity: string;
+    gross: number;
+    discount?: number;
+    tax?: number;
+    total: number;
+  },
+): Record<string, unknown> {
+  return {
+    uid,
+    name: options.name,
+    variation_name: options.variationName,
+    catalog_object_id: options.catalogObjectId,
+    quantity: options.quantity,
+    gross_sales_money: money(options.gross),
+    total_discount_money: money(options.discount ?? 0),
+    total_tax_money: money(options.tax ?? 0),
+    total_money: money(options.total),
+  };
+}
+
+function order(
+  id: string,
+  options: {
+    state?: string;
+    customerId?: string;
+    total: number;
+    tax?: number;
+    discount?: number;
+    serviceCharge?: number;
+    tip?: number;
+    source?: string;
+    version?: number;
+    updatedAt?: string;
+    createdAt?: string;
+    closedAt?: string;
+    lines?: Record<string, unknown>[];
+  },
+): Record<string, unknown> {
+  const tip = options.tip ?? 0;
+  return {
+    id,
+    location_id: "L1",
+    state: options.state ?? "COMPLETED",
+    created_at: options.createdAt ?? CREATED,
+    updated_at: options.updatedAt ?? options.closedAt ?? CREATED,
+    closed_at: options.closedAt ?? CREATED,
+    customer_id: options.customerId,
+    version: options.version ?? 1,
+    source: options.source ? { name: options.source } : undefined,
+    net_amounts: {
+      total_money: money(options.total),
+      tax_money: money(options.tax ?? 0),
+      discount_money: money(options.discount ?? 0),
+      tip_money: money(tip),
+      service_charge_money: money(options.serviceCharge ?? 0),
+    },
+    line_items: options.lines,
+  };
+}
+
+function payment(
+  id: string,
+  orderId: string,
+  options: {
+    amount: number;
+    tip?: number;
+    fee?: number;
+    method: string;
+  },
+): Record<string, unknown> {
+  return {
+    id,
+    order_id: orderId,
+    location_id: "L1",
+    status: "COMPLETED",
+    created_at: CREATED,
+    updated_at: CREATED,
+    source_type: options.method,
+    amount_money: money(options.amount),
+    tip_money: money(options.tip ?? 0),
+    processing_fee:
+      options.fee === undefined
+        ? undefined
+        : [{ amount_money: money(options.fee) }],
+  };
+}
+
+function refund(
+  id: string,
+  paymentId: string,
+  orderId: string,
+  amount: number,
+): Record<string, unknown> {
+  return {
+    id,
+    payment_id: paymentId,
+    order_id: orderId,
+    location_id: "L1",
+    status: "COMPLETED",
+    created_at: CREATED,
+    amount_money: money(amount),
+    reason: "do not persist",
+  };
+}
+
+async function seedCatalog(database: DatabaseService): Promise<void> {
+  const [product] = await database.db
+    .insert(products)
+    .values({ name: "SYNTHETIC Commerce Product", status: "active" })
+    .returning({ id: products.id });
+  if (!product) {
+    throw new Error("product seed failed");
+  }
+  const [variation] = await database.db
+    .insert(productVariations)
+    .values({
+      productId: product.id,
+      name: "Each",
+      sku: "SYN-SKU",
+      status: "active",
+    })
+    .returning({ id: productVariations.id });
+  if (!variation) {
+    throw new Error("variation seed failed");
+  }
+  await database.db.insert(sourceIdentities).values([
+    {
+      provider: SQUARE_PROVIDER,
+      entityType: SQUARE_ITEM_ENTITY,
+      externalId: ITEM,
+      internalEntityType: INTERNAL_PRODUCT,
+      internalEntityId: product.id,
+    },
+    {
+      provider: SQUARE_PROVIDER,
+      entityType: SQUARE_ITEM_VARIATION_ENTITY,
+      externalId: VAR,
+      internalEntityType: INTERNAL_PRODUCT_VARIATION,
+      internalEntityId: variation.id,
+    },
+  ]);
+}
+
+async function loadSale(
+  database: DatabaseService,
+  externalId: string,
+): Promise<{
+  id: string;
+  kind: string;
+  status: string;
+  totalAmount: number;
+  discountAmount: number;
+  taxAmount: number;
+  serviceChargeAmount: number;
+}> {
+  const id = await resolvedId(database, SQUARE_ORDER_ENTITY, externalId);
+  if (!id) {
+    throw new Error(`missing sale ${externalId}`);
+  }
+  const [row] = await database.db
+    .select({
+      id: sales.id,
+      kind: sales.kind,
+      status: sales.status,
+      totalAmount: sales.totalAmount,
+      discountAmount: sales.discountAmount,
+      taxAmount: sales.taxAmount,
+      serviceChargeAmount: sales.serviceChargeAmount,
+    })
+    .from(sales)
+    .where(eq(sales.id, id))
+    .limit(1);
+  if (!row) {
+    throw new Error("sale row missing");
+  }
+  return row;
+}
+
+async function listLines(
+  database: DatabaseService,
+  saleId: string,
+): Promise<
+  {
+    id: string;
+    description: string | null;
+    quantity: string;
+    productId: string | null;
+    productVariationId: string | null;
+    isActive: boolean;
+  }[]
+> {
+  return database.db
+    .select({
+      id: saleLineItems.id,
+      description: saleLineItems.description,
+      quantity: saleLineItems.quantity,
+      productId: saleLineItems.productId,
+      productVariationId: saleLineItems.productVariationId,
+      isActive: saleLineItems.isActive,
+    })
+    .from(saleLineItems)
+    .where(eq(saleLineItems.saleId, saleId));
+}
+
+async function loadPayment(
+  database: DatabaseService,
+  externalId: string,
+): Promise<{
+  id: string;
+  saleId: string;
+  amount: number;
+  tipAmount: number;
+  processingFeeAmount: number | null;
+  method: string | null;
+}> {
+  const id = await resolvedId(database, SQUARE_PAYMENT_ENTITY, externalId);
+  if (!id) {
+    throw new Error(`missing payment ${externalId}`);
+  }
+  const [row] = await database.db
+    .select({
+      id: payments.id,
+      saleId: payments.saleId,
+      amount: payments.amount,
+      tipAmount: payments.tipAmount,
+      processingFeeAmount: payments.processingFeeAmount,
+      method: payments.method,
+    })
+    .from(payments)
+    .where(eq(payments.id, id))
+    .limit(1);
+  if (!row) {
+    throw new Error("payment row missing");
+  }
+  return row;
+}
+
+async function loadRefund(
+  database: DatabaseService,
+  externalId: string,
+): Promise<{ id: string; saleId: string | null; paymentId: string | null; amount: number }> {
+  const id = await resolvedId(database, SQUARE_REFUND_ENTITY, externalId);
+  if (!id) {
+    throw new Error(`missing refund ${externalId}`);
+  }
+  const [row] = await database.db
+    .select({
+      id: refunds.id,
+      saleId: refunds.saleId,
+      paymentId: refunds.paymentId,
+      amount: refunds.amount,
+    })
+    .from(refunds)
+    .where(eq(refunds.id, id))
+    .limit(1);
+  if (!row) {
+    throw new Error("refund row missing");
+  }
+  return row;
+}
+
+async function countIdentities(
+  database: DatabaseService,
+  entityType: string,
+  externalIds: string[],
+): Promise<number> {
+  const rows = await database.db
+    .select({ internalEntityId: sourceIdentities.internalEntityId })
+    .from(sourceIdentities)
+    .where(
+      and(
+        eq(sourceIdentities.provider, SQUARE_PROVIDER),
+        eq(sourceIdentities.entityType, entityType),
+        inArray(sourceIdentities.externalId, externalIds),
+      ),
+    );
+  return rows.filter((row) => row.internalEntityId).length;
+}
+
+async function resolvedId(
+  database: DatabaseService,
+  entityType: string,
+  externalId: string,
+): Promise<string | undefined> {
+  const rows = await database.db
+    .select({ internalEntityId: sourceIdentities.internalEntityId })
+    .from(sourceIdentities)
+    .where(
+      and(
+        eq(sourceIdentities.provider, SQUARE_PROVIDER),
+        eq(sourceIdentities.entityType, entityType),
+        eq(sourceIdentities.externalId, externalId),
+      ),
+    )
+    .limit(1);
+  return rows[0]?.internalEntityId ?? undefined;
+}
+
+async function cleanup(database: DatabaseService): Promise<void> {
+  const identities = await database.db
+    .select({
+      entityType: sourceIdentities.entityType,
+      internalEntityId: sourceIdentities.internalEntityId,
+    })
+    .from(sourceIdentities)
+    .where(
+      and(
+        eq(sourceIdentities.provider, SQUARE_PROVIDER),
+        or(
+          inArray(sourceIdentities.externalId, ALL_EXTERNAL_IDS),
+          like(sourceIdentities.externalId, "SYN-SQ-COM-%"),
+        ),
+      ),
+    );
+
+  const saleIds = identities
+    .filter((row) => row.entityType === SQUARE_ORDER_ENTITY)
+    .map((row) => row.internalEntityId)
+    .filter((id): id is string => Boolean(id));
+  const paymentIds = identities
+    .filter((row) => row.entityType === SQUARE_PAYMENT_ENTITY)
+    .map((row) => row.internalEntityId)
+    .filter((id): id is string => Boolean(id));
+  const refundIds = identities
+    .filter((row) => row.entityType === SQUARE_REFUND_ENTITY)
+    .map((row) => row.internalEntityId)
+    .filter((id): id is string => Boolean(id));
+  const variationIds = identities
+    .filter((row) => row.entityType === SQUARE_ITEM_VARIATION_ENTITY)
+    .map((row) => row.internalEntityId)
+    .filter((id): id is string => Boolean(id));
+  const productIds = identities
+    .filter((row) => row.entityType === SQUARE_ITEM_ENTITY)
+    .map((row) => row.internalEntityId)
+    .filter((id): id is string => Boolean(id));
+  const lineIds = identities
+    .filter((row) => row.entityType === SQUARE_ORDER_LINE_ENTITY)
+    .map((row) => row.internalEntityId)
+    .filter((id): id is string => Boolean(id));
+
+  if (refundIds.length > 0) {
+    await database.db.delete(refunds).where(inArray(refunds.id, refundIds));
+  }
+  if (paymentIds.length > 0) {
+    await database.db.delete(payments).where(inArray(payments.id, paymentIds));
+  }
+  if (lineIds.length > 0) {
+    await database.db
+      .delete(saleLineItems)
+      .where(inArray(saleLineItems.id, lineIds));
+  }
+  if (saleIds.length > 0) {
+    await database.db
+      .delete(saleLineItems)
+      .where(inArray(saleLineItems.saleId, saleIds));
+    await database.db.delete(sales).where(inArray(sales.id, saleIds));
+  }
+  if (variationIds.length > 0) {
+    await database.db
+      .delete(productVariations)
+      .where(inArray(productVariations.id, variationIds));
+  }
+  if (productIds.length > 0) {
+    await database.db.delete(products).where(inArray(products.id, productIds));
+  }
+
+  await database.db
+    .delete(sourceIdentities)
+    .where(
+      and(
+        eq(sourceIdentities.provider, SQUARE_PROVIDER),
+        or(
+          inArray(sourceIdentities.externalId, ALL_EXTERNAL_IDS),
+          like(sourceIdentities.externalId, "SYN-SQ-COM-%"),
+        ),
+      ),
+    );
+  await database.db
+    .delete(sourceSnapshots)
+    .where(
+      and(
+        eq(sourceSnapshots.provider, SQUARE_PROVIDER),
+        or(
+          inArray(sourceSnapshots.externalId, ALL_EXTERNAL_IDS),
+          like(sourceSnapshots.externalId, "SYN-SQ-COM-%"),
+        ),
+      ),
+    );
+}
+
+void main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : "test failed";
+  console.error(message);
+  process.exitCode = 1;
+});

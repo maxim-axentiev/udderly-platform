@@ -1,6 +1,6 @@
 # Operational schema (Phase 1)
 
-PostgreSQL tables from migrations `0002_operational_core` through `0006_commerce`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Commerce tables (`sale`, `payment`, `refund`, catalog) are **empty** until a later ingest; this migration creates schema only. Design: `docs/data-model.md`.
+PostgreSQL tables from migrations `0002_operational_core` through `0007_sale_line_item_lifecycle`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Design: `docs/data-model.md`.
 
 ## Tables
 
@@ -50,7 +50,7 @@ Revenue document. Not a provider “order”.
 
 Provider ids: Square `order.id` → `source_identity` (`square` / `order` / `<id>` → `sale`). FareHarbor has **no** order id; the sale is found via `sale.booking_id` (and later `fareharbor` / `payment` / `<pk>` on payments).
 
-Later mapping (not implemented): FH `receipt_subtotal` / `receipt_taxes` / `receipt_total`; Square order components with **canonical total excluding tip**.
+Later mapping: FH `receipt_subtotal` / `receipt_taxes` / `receipt_total`. Square order `net_amounts` with **canonical total excluding tip** (`docs/square.md`).
 
 ## `sale_line_item`
 
@@ -58,9 +58,11 @@ Later mapping (not implemented): FH `receipt_subtotal` / `receipt_taxes` / `rece
 
 Line amounts: `gross_amount` (before discount), `discount_amount`, `tax_amount`, `total_amount`, plus `currency`.
 
+Square order updates expose the **current** `line_items` array. `0007_sale_line_item_lifecycle` adds `is_active`, `last_seen_at`, and `removed_at` (same pattern as `booking_party_member`). A line missing from the latest order snapshot is deactivated, not hard-deleted. Reporting current mix should use `is_active = true`. `0006_commerce` is unchanged.
+
 ## `payment` / `refund`
 
-`payment.sale_id` is required. `amount` is cash applied to the sale **excluding** tip. `tip_amount` defaults to 0. `processing_fee_amount` nullable. No card PAN/last4/fingerprints/receipt URLs.
+`payment.sale_id` is required. `amount` is cash applied to the sale **excluding** tip (`Square amount_money`, not `total_money`). `tip_amount` defaults to 0. `processing_fee_amount` is the nonnegative **net** Square fee cost (`-sum(signed processing_fee amounts)` when that sum is ≤ 0); a net credit is reported, not stored as a fake fee. No card PAN/last4/fingerprints/receipt URLs.
 
 `refund` amounts are positive integer minor units with an explicit 3-letter `currency` on the refund row (not inferred from payment/sale). Either `sale_id` or `payment_id` (or both) must be set. Not modeled as negative payments.
 
@@ -76,7 +78,7 @@ Pull-API copies. Unique `(provider, entity_type, external_id, payload_hash)` so 
 
 Wherewolf payloads are sanitized before insert (no DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields). `visit.postal` is left null for this phase.
 
-Square catalog snapshots are sanitized CatalogObject subsets (`square` / `category` \| `item` \| `item_variation`). See `docs/square.md`.
+Square catalog snapshots are sanitized CatalogObject subsets (`square` / `category` \| `item` \| `item_variation`). Square commerce snapshots are sanitized Orders/Payments/Refunds API subsets (`order`, `payment`, `refund`). See `docs/square.md`.
 
 ## `source_identity`
 
@@ -167,4 +169,4 @@ Not stored: DOB, signatures, waiver blobs, IP, street address, full postal/ZIP f
 
 ## Not in this migration
 
-`person`, ingest jobs, Square/FareHarbor financial normalization, dashboards.
+`person`, ingest jobs, dashboards. Square catalog and Square commerce **are** ingested manually (`import:` / `normalize:`), not by a scheduler.

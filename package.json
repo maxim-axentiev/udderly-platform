@@ -50,7 +50,12 @@
     "import:square-catalog:dev": "npm run import:square-catalog:dev -w @udderly/api --",
     "normalize:square-catalog": "npm run normalize:square-catalog -w @udderly/api --",
     "normalize:square-catalog:dev": "npm run normalize:square-catalog:dev -w @udderly/api --",
-    "test:square-catalog": "npm run test:square-catalog -w @udderly/api"
+    "test:square-catalog": "npm run test:square-catalog -w @udderly/api",
+    "import:square-commerce": "npm run import:square-commerce -w @udderly/api --",
+    "import:square-commerce:dev": "npm run import:square-commerce:dev -w @udderly/api --",
+    "normalize:square-commerce": "npm run normalize:square-commerce -w @udderly/api --",
+    "normalize:square-commerce:dev": "npm run normalize:square-commerce:dev -w @udderly/api --",
+    "test:square-commerce": "npm run test:square-commerce -w @udderly/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

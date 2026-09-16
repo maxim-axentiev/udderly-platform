@@ -39,7 +39,11 @@ export class SquareClient {
     return objectsFrom(payload, "locations");
   }
 
-  async searchOrders(range: SquareUtcRange): Promise<Record<string, unknown>[]> {
+  async searchOrders(
+    range: SquareUtcRange,
+    options: { dateField?: "created_at" | "updated_at" | "closed_at" } = {},
+  ): Promise<Record<string, unknown>[]> {
+    const dateField = options.dateField ?? "created_at";
     return this.paginatePost(
       "/v2/orders/search",
       "orders",
@@ -48,14 +52,14 @@ export class SquareClient {
         query: {
           filter: {
             date_time_filter: {
-              created_at: {
+              [dateField]: {
                 start_at: range.startAt,
                 end_at: range.endAt,
               },
             },
           },
           sort: {
-            sort_field: "CREATED_AT",
+            sort_field: dateField === "created_at" ? "CREATED_AT" : "UPDATED_AT",
             sort_order: "DESC",
           },
         },
