@@ -38,18 +38,8 @@ export function sanitizeSquareOrder(
     }
   }
 
-  const net = nestedObject(object.net_amounts);
-  if (net) {
-    const netAmounts: Record<string, unknown> = {};
-    copyMoney(netAmounts, net, "total_money");
-    copyMoney(netAmounts, net, "tax_money");
-    copyMoney(netAmounts, net, "discount_money");
-    copyMoney(netAmounts, net, "tip_money");
-    copyMoney(netAmounts, net, "service_charge_money");
-    if (Object.keys(netAmounts).length > 0) {
-      payload.net_amounts = netAmounts;
-    }
-  }
+  copyOrderMoneyAmounts(payload, object, "net_amounts");
+  copyOrderMoneyAmounts(payload, object, "return_amounts");
   copyMoney(payload, object, "total_money");
   copyMoney(payload, object, "total_tax_money");
   copyMoney(payload, object, "total_discount_money");
@@ -68,6 +58,13 @@ export function sanitizeSquareOrder(
     .filter((item): item is Record<string, unknown> => Boolean(item));
   if (tenders.length > 0) {
     payload.tenders = tenders;
+  }
+
+  const returns = nestedArray(object.returns)
+    .map(sanitizeReturn)
+    .filter((item): item is Record<string, unknown> => Boolean(item));
+  if (returns.length > 0) {
+    payload.returns = returns;
   }
 
   return payload;
@@ -176,6 +173,44 @@ function sanitizeModifier(value: unknown): Record<string, unknown> | undefined {
   copyMoney(payload, value, "base_price_money");
   copyMoney(payload, value, "total_price_money");
   return Object.keys(payload).length > 0 ? payload : undefined;
+}
+
+function sanitizeReturn(value: unknown): Record<string, unknown> | undefined {
+  if (!isPlainObject(value)) {
+    return undefined;
+  }
+  const payload: Record<string, unknown> = {};
+  copyString(payload, value, "uid");
+  copyString(payload, value, "source_order_id");
+  copyOrderMoneyAmounts(payload, value, "return_amounts");
+  payload.return_line_item_count = nestedArray(value.return_line_items).length;
+  payload.return_discount_count = nestedArray(value.return_discounts).length;
+  payload.return_tax_count = nestedArray(value.return_taxes).length;
+  payload.return_service_charge_count = nestedArray(
+    value.return_service_charges,
+  ).length;
+  payload.return_tip_count = nestedArray(value.return_tips).length;
+  return payload;
+}
+
+function copyOrderMoneyAmounts(
+  target: Record<string, unknown>,
+  source: Record<string, unknown>,
+  key: string,
+): void {
+  const money = nestedObject(source[key]);
+  if (!money) {
+    return;
+  }
+  const amounts: Record<string, unknown> = {};
+  copyMoney(amounts, money, "total_money");
+  copyMoney(amounts, money, "tax_money");
+  copyMoney(amounts, money, "discount_money");
+  copyMoney(amounts, money, "tip_money");
+  copyMoney(amounts, money, "service_charge_money");
+  if (Object.keys(amounts).length > 0) {
+    target[key] = amounts;
+  }
 }
 
 function sanitizeTender(value: unknown): Record<string, unknown> | undefined {

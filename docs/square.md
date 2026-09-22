@@ -179,7 +179,7 @@ Payments and refunds are still selected by their own ListPayments/ListRefunds `b
 
 `provider = square`. `entity_type` is `order`, `payment`, or `refund`. `external_id` is the Square id. Identical sanitized JSON reuses `(provider, entity_type, external_id, payload_hash)`.
 
-Sanitized order fields: `id`, `location_id`, `state`, `created_at`, `updated_at`, `closed_at`, `version`, `customer_id` (unresolved evidence only), `source.name`/`type`, top-level original money (`total_money`, `total_tax_money`, `total_discount_money`, `total_tip_money`, `total_service_charge_money`), `net_amounts` as post-return evidence only, `line_items` (uid, catalog ids/version, names, quantity, money parts, modifier name/price only), `tenders` (`id`, `type`, `payment_id` only). No notes, fulfillments, or customer contact.
+Sanitized order fields: `id`, `location_id`, `state`, `created_at`, `updated_at`, `closed_at`, `version`, `customer_id` (unresolved evidence only), `source.name`/`type`, top-level original money (`total_money`, `total_tax_money`, `total_discount_money`, `total_tip_money`, `total_service_charge_money`), `net_amounts` as post-return evidence, top-level `return_amounts` (same money parts), `returns` summaries (`uid`, `source_order_id`, `return_amounts`, and counts of return line items / discounts / taxes / service charges / tips), `line_items` (uid, catalog ids/version, names, quantity, money parts, modifier name/price only), `tenders` (`id`, `type`, `payment_id` only). No notes, fulfillments, customer contact, or nested return names.
 
 Sanitized payment fields: `id`, `order_id`, `location_id`, `status`, timestamps, `customer_id`, `source_type`, `amount_money`, `total_money`, `tip_money`, `refunded_money`, `approved_money`, signed `processing_fee[]` (`type`, `effective_at`, `amount_money`). Derived `processing_fee_amount` is the nonnegative **net** cost when `sum(signed amounts) ≥ 0`. Production INITIAL amounts are positive (merchant fee cost). A negative net is a fee credit: `processing_fee_invalid = net_credit`, `processing_fee_amount` left null, counted as “Net fee credits not representable”. No card PAN/last4/fingerprint, cardholder name, receipt URLs, billing address, email, or phone.
 
@@ -270,6 +270,14 @@ npm run reconcile:square-commerce -- --date 2026-09-12
 Compares latest `source_snapshot` rows in the America/Toronto farm window to canonical sales, lines, payments, and refunds. It does not write. Money rules are the same as normalize (gross top-level sale totals excluding tip; return-only is not a sale; payment `amount_money` / `tip_money`; nonnegative net processing-fee cost; separate refunds).
 
 PASS requires matching source/canonical counts and money, `Invalid orders: 0`, and `Unresolved variations: 0`. Return-only orders are valid and do not fail. Inactive lines do not fail when they match the current source line set. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
+
+### Return evidence inspect (read-only)
+
+```
+npm run inspect:square-commerce -- --date 2026-08-28
+```
+
+Reads latest sanitized order snapshots in the farm window and prints aggregate return evidence only: orders with `returns` / `return_amounts`, return object and component counts, and summed `return_amounts` / `net_amounts`. It does not write. It does not print Square ids, `source_order_id` values, names, customer data, or raw payloads. Re-importing an order after a sanitizer change may insert a new snapshot hash; inspect uses the latest payload.
 
 Synthetic tests (no live Square API):
 

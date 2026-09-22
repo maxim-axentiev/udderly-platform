@@ -59,6 +59,7 @@ const ORDER_RECON = "SYN-SQ-COM-RECON-ORDER";
 const ORDER_RECON_RETURN = "SYN-SQ-COM-RECON-RETURN";
 const PAY_RECON = "SYN-SQ-COM-RECON-PAY";
 const REF_RECON = "SYN-SQ-COM-RECON-REF";
+const ORDER_RETURN_EVIDENCE = "SYN-SQ-COM-RETURN-EVIDENCE";
 const CUST = "SYN-SQ-COM-CUST";
 const VAR = "SYN-SQ-COM-VAR";
 const ITEM = "SYN-SQ-COM-ITEM";
@@ -92,6 +93,7 @@ const ALL_EXTERNAL_IDS = [
   ORDER_RECON_RETURN,
   PAY_RECON,
   REF_RECON,
+  ORDER_RETURN_EVIDENCE,
   CUST,
   VAR,
   ITEM,
@@ -723,6 +725,32 @@ async function main(): Promise<void> {
     console.log("- inactive lines matching newer source state do not fail");
 
     await cleanup(database);
+    const returnEvidence = invalidReturnEvidenceOrder(ORDER_RETURN_EVIDENCE, 1375);
+    const firstReturn = await importer.persistCommerceObjects({
+      orders: [returnEvidence],
+    });
+    if (firstReturn.snapshotsInserted !== 1) {
+      throw new Error("return evidence order must insert a snapshot");
+    }
+    const sameReturn = await importer.persistCommerceObjects({
+      orders: [returnEvidence],
+    });
+    if (sameReturn.snapshotsInserted !== 0 || sameReturn.snapshotsUnchanged < 1) {
+      throw new Error("unchanged return evidence must reuse the snapshot hash");
+    }
+    const changedReturn = await importer.persistCommerceObjects({
+      orders: [invalidReturnEvidenceOrder(ORDER_RETURN_EVIDENCE, 1400)],
+    });
+    if (changedReturn.snapshotsInserted !== 1) {
+      throw new Error("changed return evidence must insert a newer snapshot");
+    }
+    const evidenceSnapshots = await countSnapshots(database, [ORDER_RETURN_EVIDENCE]);
+    if (evidenceSnapshots !== 2) {
+      throw new Error("old return-evidence snapshot must be retained");
+    }
+    console.log("- return evidence snapshots are hash-idempotent and versioned");
+
+    await cleanup(database);
     console.log("");
     console.log("Square commerce tests passed.");
   } finally {
@@ -845,6 +873,46 @@ function invalidGrossOrder(id: string, netTotal: number): Record<string, unknown
     net_amounts: {
       total_money: money(netTotal),
     },
+  };
+}
+
+function invalidReturnEvidenceOrder(
+  id: string,
+  returnedDiscount: number,
+): Record<string, unknown> {
+  return {
+    id,
+    location_id: "L1",
+    state: "COMPLETED",
+    created_at: CREATED,
+    updated_at: CREATED,
+    closed_at: CREATED,
+    version: 1,
+    net_amounts: {
+      total_money: money(0),
+      tax_money: money(0),
+      discount_money: money(-returnedDiscount),
+      tip_money: money(0),
+      service_charge_money: money(0),
+    },
+    return_amounts: {
+      total_money: money(0),
+      tax_money: money(0),
+      discount_money: money(returnedDiscount),
+      tip_money: money(0),
+      service_charge_money: money(0),
+    },
+    returns: [
+      {
+        uid: "RET-UID",
+        source_order_id: "SRC-ORDER-1",
+        note: "do not persist",
+        return_discounts: [{ name: "Staff discount" }],
+        return_amounts: {
+          discount_money: money(returnedDiscount),
+        },
+      },
+    ],
   };
 }
 

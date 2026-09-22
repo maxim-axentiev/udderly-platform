@@ -111,6 +111,22 @@ test("D. missing gross with zero, positive, or unreadable net is invalid order m
     }).kind,
     "invalid_order_money",
   );
+  assert.equal(
+    classifySquareOrderMoney({
+      net_amounts: {
+        total_money: { amount: 0, currency: "CAD" },
+        tax_money: { amount: 0, currency: "CAD" },
+        discount_money: { amount: -1375, currency: "CAD" },
+        tip_money: { amount: 0, currency: "CAD" },
+        service_charge_money: { amount: 0, currency: "CAD" },
+      },
+      return_amounts: {
+        discount_money: { amount: 1375, currency: "CAD" },
+      },
+      returns: [{ uid: "r1" }],
+    }).kind,
+    "invalid_order_money",
+  );
 });
 
 test("sanitizes return-only order as snapshot evidence with negative net", () => {
@@ -215,4 +231,91 @@ test("maps card cash and external methods", () => {
   assert.equal(squarePaymentMethod("CASH"), "cash");
   assert.equal(squarePaymentMethod("EXTERNAL"), "external");
   assert.equal(squarePaymentMethod("WALLET"), "other");
+});
+
+function leakyReturn(): Record<string, unknown> {
+  return {
+    uid: "RET-UID",
+    source_order_id: "SRC-ORDER-1",
+    note: "do not persist",
+    customer_id: "C-SECRET",
+    return_amounts: {
+      total_money: { amount: 0, currency: "CAD" },
+      tax_money: { amount: 0, currency: "CAD" },
+      discount_money: { amount: 1375, currency: "CAD" },
+      tip_money: { amount: 0, currency: "CAD" },
+      service_charge_money: { amount: 0, currency: "CAD" },
+    },
+    return_line_items: [
+      {
+        uid: "RL1",
+        name: "Secret Cheese Name",
+        quantity: "1",
+        note: "allergy",
+      },
+    ],
+    return_discounts: [{ uid: "RD1", name: "Staff discount", amount_money: { amount: 1375 } }],
+    return_taxes: [{ uid: "RT1", name: "HST" }],
+    return_service_charges: [{ uid: "RS1", name: "fee" }],
+    return_tips: [{ uid: "RP1", name: "tip" }],
+  };
+}
+
+test("sanitizes top-level return_amounts and safe return summaries", () => {
+  const sanitized = sanitizeSquareOrder({
+    id: "O-RET",
+    location_id: "L1",
+    state: "COMPLETED",
+    created_at: "2026-08-28T12:00:00Z",
+    email_address: "leak@example.invalid",
+    return_amounts: {
+      total_money: { amount: 0, currency: "CAD" },
+      tax_money: { amount: 0, currency: "CAD" },
+      discount_money: { amount: 1375, currency: "CAD" },
+      tip_money: { amount: 0, currency: "CAD" },
+      service_charge_money: { amount: 0, currency: "CAD" },
+    },
+    net_amounts: {
+      total_money: { amount: 0, currency: "CAD" },
+      tax_money: { amount: 0, currency: "CAD" },
+      discount_money: { amount: -1375, currency: "CAD" },
+      tip_money: { amount: 0, currency: "CAD" },
+      service_charge_money: { amount: 0, currency: "CAD" },
+    },
+    returns: [leakyReturn()],
+  });
+  assert.deepEqual(sanitized?.return_amounts, {
+    total_money: { amount: 0, currency: "CAD" },
+    tax_money: { amount: 0, currency: "CAD" },
+    discount_money: { amount: 1375, currency: "CAD" },
+    tip_money: { amount: 0, currency: "CAD" },
+    service_charge_money: { amount: 0, currency: "CAD" },
+  });
+  const returns = sanitized?.returns as Record<string, unknown>[];
+  assert.equal(returns.length, 1);
+  assert.equal(returns[0]?.uid, "RET-UID");
+  assert.equal(returns[0]?.source_order_id, "SRC-ORDER-1");
+  assert.equal(returns[0]?.return_line_item_count, 1);
+  assert.equal(returns[0]?.return_discount_count, 1);
+  assert.equal(returns[0]?.return_tax_count, 1);
+  assert.equal(returns[0]?.return_service_charge_count, 1);
+  assert.equal(returns[0]?.return_tip_count, 1);
+  assert.deepEqual(Object.keys(returns[0] ?? {}).sort(), [
+    "return_amounts",
+    "return_discount_count",
+    "return_line_item_count",
+    "return_service_charge_count",
+    "return_tax_count",
+    "return_tip_count",
+    "source_order_id",
+    "uid",
+  ]);
+  const serialized = JSON.stringify(sanitized);
+  assert.equal(serialized.includes("Secret Cheese Name"), false);
+  assert.equal(serialized.includes("Staff discount"), false);
+  assert.equal(serialized.includes("do not persist"), false);
+  assert.equal(serialized.includes("allergy"), false);
+  assert.equal(serialized.includes("leak@example.invalid"), false);
+  assert.equal(serialized.includes("C-SECRET"), false);
+  assert.equal("email_address" in (sanitized ?? {}), false);
 });

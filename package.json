@@ -57,6 +57,8 @@
     "normalize:square-commerce:dev": "npm run normalize:square-commerce:dev -w @udderly/api --",
     "reconcile:square-commerce": "npm run reconcile:square-commerce -w @udderly/api --",
     "reconcile:square-commerce:dev": "npm run reconcile:square-commerce:dev -w @udderly/api --",
+    "inspect:square-commerce": "npm run inspect:square-commerce -w @udderly/api --",
+    "inspect:square-commerce:dev": "npm run inspect:square-commerce:dev -w @udderly/api --",
     "test:square-commerce": "npm run test:square-commerce -w @udderly/api"
   },
   "devDependencies": {
