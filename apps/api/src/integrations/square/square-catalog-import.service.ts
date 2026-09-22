@@ -42,6 +42,10 @@ export class SquareCatalogImportService {
 
   async persistCatalogObjects(
     objects: Record<string, unknown>[],
+    options: {
+      expandNestedVariations?: boolean;
+      historicalRecovery?: boolean;
+    } = {},
   ): Promise<SquareCatalogImportSummary> {
     const observedAt = new Date();
     let snapshotsInserted = 0;
@@ -52,7 +56,10 @@ export class SquareCatalogImportService {
     let variationsFetched = 0;
     const seen = new Set<string>();
 
-    const records = expandCatalogObjects(objects);
+    const records =
+      options.expandNestedVariations === false
+        ? objects
+        : expandCatalogObjects(objects);
     for (const object of records) {
       const sanitized = sanitizeSquareCatalogObject(object);
       if (!sanitized) {
@@ -61,7 +68,7 @@ export class SquareCatalogImportService {
       }
 
       const entityType = entityTypeFor(sanitized.type);
-      const key = `${entityType}:${sanitized.id}`;
+      const key = `${entityType}:${sanitized.id}:${sanitized.version ?? ""}`;
       if (seen.has(key)) {
         continue;
       }
@@ -77,7 +84,9 @@ export class SquareCatalogImportService {
 
       const result = await this.persistSnapshot(
         entityType,
-        catalogSnapshotPayload(sanitized),
+        catalogSnapshotPayload(sanitized, {
+          historicalRecovery: options.historicalRecovery,
+        }),
         observedAt,
       );
       if (result === "inserted") {

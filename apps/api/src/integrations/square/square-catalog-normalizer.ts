@@ -10,6 +10,7 @@ import {
 import { sourceIdentities } from "../../database/schema/source-identity";
 import { sourceSnapshots } from "../../database/schema/source-snapshots";
 import { squareCatalogStatus } from "./square.catalog.status";
+import { catalogSnapshotIsNewer } from "./square.catalog.version";
 import {
   INTERNAL_PRODUCT,
   INTERNAL_PRODUCT_CATEGORY,
@@ -98,19 +99,12 @@ export class SquareCatalogNormalizer {
         ),
       );
 
-    const currentVersion = numberValue(snapshot.payload.version) ?? 0;
     for (const row of rows) {
       if (row.id === snapshot.id) {
         continue;
       }
-      if (row.observedAt.getTime() > snapshot.observedAt.getTime()) {
+      if (catalogSnapshotIsNewer(row, snapshot)) {
         return true;
-      }
-      if (row.observedAt.getTime() === snapshot.observedAt.getTime()) {
-        const otherVersion = numberValue(row.payload.version) ?? 0;
-        if (otherVersion > currentVersion) {
-          return true;
-        }
       }
     }
     return false;
@@ -127,6 +121,7 @@ export class SquareCatalogNormalizer {
     const status = squareCatalogStatus({
       isDeleted: snapshot.payload.is_deleted === true,
       isArchived: snapshot.payload.is_archived === true,
+      historicalRecovery: snapshot.payload.historical_recovery === true,
     });
     const existingId = await this.findResolved(
       db,
@@ -179,6 +174,7 @@ export class SquareCatalogNormalizer {
     const status = squareCatalogStatus({
       isDeleted: snapshot.payload.is_deleted === true,
       isArchived: snapshot.payload.is_archived === true,
+      historicalRecovery: snapshot.payload.historical_recovery === true,
     });
     let productId = await this.findResolved(
       db,
@@ -241,6 +237,7 @@ export class SquareCatalogNormalizer {
     const status = squareCatalogStatus({
       isDeleted: snapshot.payload.is_deleted === true,
       isArchived: snapshot.payload.is_archived === true,
+      historicalRecovery: snapshot.payload.historical_recovery === true,
     });
 
     const existingId = await this.findResolved(
@@ -421,10 +418,6 @@ export class SquareCatalogNormalizer {
 
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function numberValue(value: unknown): number | undefined {
-  return typeof value === "number" ? value : undefined;
 }
 
 function categoryIdsFrom(payload: Record<string, unknown>): string[] {

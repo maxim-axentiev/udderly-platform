@@ -120,6 +120,34 @@ export class SquareClient {
     });
   }
 
+  async batchRetrieveCatalogObjects(input: {
+    objectIds: string[];
+    catalogVersion: number;
+    includeDeletedObjects?: boolean;
+    includeRelatedObjects?: boolean;
+  }): Promise<{
+    objects: Record<string, unknown>[];
+    relatedObjects: Record<string, unknown>[];
+  }> {
+    const objects: Record<string, unknown>[] = [];
+    const relatedObjects: Record<string, unknown>[] = [];
+    const uniqueIds = [...new Set(input.objectIds.filter((id) => id.length > 0))];
+    for (let index = 0; index < uniqueIds.length; index += 1000) {
+      const chunk = uniqueIds.slice(index, index + 1000);
+      const payload = await this.request("POST", "/v2/catalog/batch-retrieve", {
+        body: {
+          object_ids: chunk,
+          catalog_version: input.catalogVersion,
+          include_deleted_objects: input.includeDeletedObjects !== false,
+          include_related_objects: input.includeRelatedObjects !== false,
+        },
+      });
+      objects.push(...objectsFrom(payload, "objects"));
+      relatedObjects.push(...objectsFrom(payload, "related_objects"));
+    }
+    return { objects, relatedObjects };
+  }
+
   async listCustomerGroups(): Promise<Record<string, unknown>[]> {
     return this.paginateGet("/v2/customers/groups", "groups", {});
   }

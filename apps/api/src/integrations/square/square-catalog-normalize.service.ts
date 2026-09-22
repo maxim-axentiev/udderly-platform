@@ -11,6 +11,7 @@ import {
   SQUARE_PROVIDER,
 } from "./square.constants";
 import { SquareCatalogNormalizer } from "./square-catalog-normalizer";
+import { catalogSnapshotIsNewer } from "./square.catalog.version";
 
 export type SquareCatalogNormalizeSummary = {
   categories: number;
@@ -228,20 +229,8 @@ export class SquareCatalogNormalizeService {
         latest.set(row.externalId, row);
         continue;
       }
-      if (row.observedAt.getTime() > existing.observedAt.getTime()) {
+      if (catalogSnapshotIsNewer(row, existing)) {
         latest.set(row.externalId, row);
-        continue;
-      }
-      if (row.observedAt.getTime() === existing.observedAt.getTime()) {
-        const rowVersion =
-          typeof row.payload.version === "number" ? row.payload.version : 0;
-        const existingVersion =
-          typeof existing.payload.version === "number"
-            ? existing.payload.version
-            : 0;
-        if (rowVersion > existingVersion) {
-          latest.set(row.externalId, row);
-        }
       }
     }
     return [...latest.values()];

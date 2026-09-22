@@ -143,6 +143,8 @@ Identity is always the Square CatalogObject id. Names may duplicate. SKU is null
 
 Deleted/archived objects are retained. They are never hard-deleted.
 
+Historical catalog recovery snapshots set `historical_recovery = true`. If Square reports `is_deleted`, canonical status is `deleted`. Otherwise a recovered historical version is stored as `archived` so it can resolve old sale lines without claiming the object is currently active. An older recovered version never overwrites a newer canonical row.
+
 ### Assignments
 
 Latest item snapshot category ids are synchronized onto `product_category_assignment` (insert current, delete memberships no longer present). Uncategorized items are valid. Unresolved Square category ids are counted, not invented. Removing an assignment does not delete the category or product.
@@ -151,12 +153,30 @@ Latest item snapshot category ids are synchronized onto `product_category_assign
 
 Each category snapshot applies in its own transaction. Each item snapshot applies in one transaction that also applies that item’s variation snapshots. Remaining variations apply in their own transactions. A variation whose parent item identity does not exist writes nothing.
 
-Newest snapshot per Square id (by `observed_at`, then catalog `version`) is selected. Applying an older snapshot is `skipped_stale`.
+Newest snapshot per Square id is selected by provider catalog `version`, then `observed_at` only as a tiebreaker. Applying an older catalog version is `skipped_stale`, even if that snapshot was observed later (historical recovery runs today). `observed_at` alone must not roll a newer canonical product or variation backward.
 
-Synthetic tests (no live Square API):
+### Historical catalog recovery (manual)
+
+```
+npm run recover:square-catalog -- --from 2026-06-01 --to 2026-06-30
+npm run recover:square-catalog -- --date 2026-06-15 --dry-run
+```
+
+Production uses compiled dist JS. Local iteration may use `recover:square-catalog:dev`. This is not scheduled.
+
+It finds latest farm-window order snapshots whose line items have a `catalog_object_id` that does not resolve `square / item_variation / <id>` and that include a usable `catalog_version`. Pairs are `(catalog_object_id, catalog_version)` — the same object at two versions is two requests. Output is aggregate-only (no Square ids, names, or order ids).
+
+`--dry-run` reads the database only: no Square API calls and no writes.
+
+Live recovery `POST`s `/v2/catalog/batch-retrieve` grouped by `catalog_version`, with `include_deleted_objects` and `include_related_objects`. Requested ids must come back as `ITEM_VARIATION`. Unexpected types and missing objects are counted, not invented. Related parent `ITEM` objects are stored when present. Nested related variations are not snapshotted unless they were requested.
+
+Existing sanitization and `source_snapshot` hash dedupe apply. Recovery does **not** run `normalize:square-catalog`, commerce normalize, or reconcile. After recovery, run those manually.
+
+Synthetic tests:
 
 ```
 npm run test:square-catalog
+npm run test:square-catalog-recovery
 ```
 
 ## Manual commerce import

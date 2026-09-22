@@ -172,6 +172,7 @@ function unique(values: string[]): string[] {
 
 export function catalogSnapshotPayload(
   snapshot: SquareCatalogSnapshot,
+  options: { historicalRecovery?: boolean } = {},
 ): Record<string, unknown> {
   const payload: Record<string, unknown> = {
     id: snapshot.id,
@@ -195,6 +196,9 @@ export function catalogSnapshotPayload(
   }
   if (snapshot.itemId !== undefined) {
     payload.item_id = snapshot.itemId;
+  }
+  if (options.historicalRecovery) {
+    payload.historical_recovery = true;
   }
   return payload;
 }

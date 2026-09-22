@@ -77,3 +77,14 @@ test("deleted wins over archived for canonical status", () => {
   );
   assert.equal(squareCatalogStatus({}), "active");
 });
+
+test("historical recovery without is_deleted is not treated as currently active", () => {
+  assert.equal(
+    squareCatalogStatus({ historicalRecovery: true }),
+    "archived",
+  );
+  assert.equal(
+    squareCatalogStatus({ historicalRecovery: true, isDeleted: true }),
+    "deleted",
+  );
+});

@@ -220,6 +220,16 @@ async function main(): Promise<void> {
     }
     console.log("- older snapshot cannot roll newer canonical state backward");
 
+    await importer.persistCatalogObjects([
+      item(ITEM_STALE, "SYNTHETIC Rolled Name", { version: 1 }),
+    ]);
+    await normalizer.normalizeLatest();
+    const afterOlderObserved = await loadProduct(database, ITEM_STALE);
+    if (afterOlderObserved.name !== "SYNTHETIC New Name") {
+      throw new Error("later observed_at must not apply an older catalog version");
+    }
+    console.log("- catalog version outranks observed_at for stale comparison");
+
     const secondNormalize = await normalizer.normalizeLatest();
     if (
       secondNormalize.unresolvedParents < 1 ||
