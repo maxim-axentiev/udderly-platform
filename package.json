@@ -59,6 +59,9 @@
     "reconcile:square-commerce:dev": "npm run reconcile:square-commerce:dev -w @udderly/api --",
     "inspect:square-commerce": "npm run inspect:square-commerce -w @udderly/api --",
     "inspect:square-commerce:dev": "npm run inspect:square-commerce:dev -w @udderly/api --",
+    "backfill:square-commerce": "npm run backfill:square-commerce -w @udderly/api --",
+    "backfill:square-commerce:dev": "npm run backfill:square-commerce:dev -w @udderly/api --",
+    "test:square-backfill": "npm run test:square-backfill -w @udderly/api",
     "test:square-commerce": "npm run test:square-commerce -w @udderly/api"
   },
   "devDependencies": {

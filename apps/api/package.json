@@ -51,6 +51,9 @@
     "reconcile:square-commerce:dev": "tsx src/integrations/square/reconcile-square-commerce.cli.ts",
     "inspect:square-commerce": "node dist/integrations/square/inspect-square-commerce.cli.js",
     "inspect:square-commerce:dev": "tsx src/integrations/square/inspect-square-commerce.cli.ts",
+    "backfill:square-commerce": "node dist/integrations/square/backfill-square-commerce.cli.js",
+    "backfill:square-commerce:dev": "tsx src/integrations/square/backfill-square-commerce.cli.ts",
+    "test:square-backfill": "tsx --test src/integrations/square/square.commerce.backfill.spec.ts",
     "test:square-commerce": "tsx --test src/integrations/square/square.commerce.sanitize.spec.ts src/integrations/square/square.commerce.money.spec.ts src/integrations/square/square.commerce.line.spec.ts src/integrations/square/square.client.commerce.spec.ts src/integrations/square/square.commerce.reconcile.spec.ts src/integrations/square/square.commerce.inspect.spec.ts && tsx src/integrations/square/test-square-commerce.cli.ts"
   },
   "dependencies": {

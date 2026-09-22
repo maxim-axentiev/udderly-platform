@@ -1,6 +1,6 @@
 # Square integration
 
-Read-only production connection. Square is the source for physical farm-store catalog and retail commerce. Catalog and commerce ingest are **manual two-step** commands (snapshot, then normalize). There is no Square webhook receiver and no recurring poller.
+Read-only production connection. Square is the source for physical farm-store catalog and retail commerce. Catalog and commerce ingest are **manual two-step** commands (snapshot, then normalize). Historical commerce backfill is a **manual** command that runs those same steps plus reconcile, one farm-calendar month at a time. There is no Square webhook receiver and no recurring poller.
 
 This repository does **not** ingest Square customers as people. Instant Profile `customer_id` may be stored as an unresolved `source_identity` only.
 
@@ -278,6 +278,25 @@ Compares latest `source_snapshot` rows in the America/Toronto farm window to can
 
 PASS requires matching source/canonical counts and money, `Invalid orders: 0`, and `Unresolved variations: 0`. Custom/non-catalog lines are valid and do not fail. Return-only orders and return-adjustment non-sales are valid provider records and do not fail. Inactive lines do not fail when they match the current source line set. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
 
+### Historical commerce backfill (manual)
+
+```
+npm run backfill:square-commerce -- --from YYYY-MM-DD --to YYYY-MM-DD
+npm run backfill:square-commerce -- --from YYYY-MM-DD --to YYYY-MM-DD --dry-run
+```
+
+Production uses compiled dist JS (`backfill:square-commerce`). Local iteration may use `backfill:square-commerce:dev`.
+
+This is not scheduled and does not invent products or catalog mappings. It reuses existing import, normalize, and reconcile services. Inclusive America/Toronto farm dates are split into calendar-month chunks and processed **newest to oldest**. Mid-month `--from` / `--to` clip the first and last months.
+
+`--dry-run` prints the chunk list and performs no Square API calls and no database writes (it does not start the Nest app).
+
+Each live chunk is import → normalize → reconcile. The existing reconcile verdict is the gate. On import/normalize throw or reconcile FAIL, the runner stops, prints the failed chunk dates, and exits nonzero. Older chunks are not started. A rerun is safe: snapshots deduplicate by hash, normalize is idempotent, and there is no extra backfill checkpoint store.
+
+The already-proven production window is 2026-08-17 through 2026-09-15. Choose `--to` before that range for the first historical run. Do not assume a fixed earliest Square date; pass `--from` explicitly.
+
+An unresolved catalog-bearing line still FAILs reconcile and stops the backfill. Inspect that historical catalog id separately; do not fuzzy-match or re-import catalog every month.
+
 ### Return evidence inspect (read-only)
 
 ```
@@ -290,4 +309,5 @@ Synthetic tests (no live Square API):
 
 ```
 npm run test:square-commerce
+npm run test:square-backfill
 ```
