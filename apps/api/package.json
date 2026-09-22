@@ -47,7 +47,9 @@
     "import:square-commerce:dev": "tsx src/integrations/square/import-square-commerce.cli.ts",
     "normalize:square-commerce": "node dist/integrations/square/normalize-square-commerce.cli.js",
     "normalize:square-commerce:dev": "tsx src/integrations/square/normalize-square-commerce.cli.ts",
-    "test:square-commerce": "tsx --test src/integrations/square/square.commerce.sanitize.spec.ts src/integrations/square/square.commerce.money.spec.ts src/integrations/square/square.commerce.line.spec.ts src/integrations/square/square.client.commerce.spec.ts && tsx src/integrations/square/test-square-commerce.cli.ts"
+    "reconcile:square-commerce": "node dist/integrations/square/reconcile-square-commerce.cli.js",
+    "reconcile:square-commerce:dev": "tsx src/integrations/square/reconcile-square-commerce.cli.ts",
+    "test:square-commerce": "tsx --test src/integrations/square/square.commerce.sanitize.spec.ts src/integrations/square/square.commerce.money.spec.ts src/integrations/square/square.commerce.line.spec.ts src/integrations/square/square.client.commerce.spec.ts src/integrations/square/square.commerce.reconcile.spec.ts && tsx src/integrations/square/test-square-commerce.cli.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

@@ -15,6 +15,7 @@ import { sourceIdentities } from "../../database/schema/source-identity";
 import { sourceSnapshots } from "../../database/schema/source-snapshots";
 import { SquareCommerceImportService } from "./square-commerce-import.service";
 import { SquareCommerceNormalizeService } from "./square-commerce-normalize.service";
+import { SquareCommerceReconcileService } from "./square-commerce-reconcile.service";
 import {
   INTERNAL_PRODUCT,
   INTERNAL_PRODUCT_VARIATION,
@@ -54,6 +55,10 @@ const PAY_CREDIT = "SYN-SQ-COM-PAY-CREDIT";
 const PAY_GROSS = "SYN-SQ-COM-PAY-GROSS";
 const REF_GROSS = "SYN-SQ-COM-REF-GROSS";
 const REF_A = "SYN-SQ-COM-REF-A";
+const ORDER_RECON = "SYN-SQ-COM-RECON-ORDER";
+const ORDER_RECON_RETURN = "SYN-SQ-COM-RECON-RETURN";
+const PAY_RECON = "SYN-SQ-COM-RECON-PAY";
+const REF_RECON = "SYN-SQ-COM-RECON-REF";
 const CUST = "SYN-SQ-COM-CUST";
 const VAR = "SYN-SQ-COM-VAR";
 const ITEM = "SYN-SQ-COM-ITEM";
@@ -83,6 +88,10 @@ const ALL_EXTERNAL_IDS = [
   PAY_GROSS,
   REF_GROSS,
   REF_A,
+  ORDER_RECON,
+  ORDER_RECON_RETURN,
+  PAY_RECON,
+  REF_RECON,
   CUST,
   VAR,
   ITEM,
@@ -100,6 +109,7 @@ async function main(): Promise<void> {
   const database = app.get(DatabaseService);
   const importer = app.get(SquareCommerceImportService);
   const normalizer = app.get(SquareCommerceNormalizeService);
+  const reconcilor = app.get(SquareCommerceReconcileService);
 
   try {
     await cleanup(database);
@@ -627,6 +637,90 @@ async function main(): Promise<void> {
       throw new Error("idempotent normalize created extra sales");
     }
     console.log("- repeated normalize does not duplicate commerce rows");
+
+    await cleanup(database);
+    await seedCatalog(database);
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_RECON, {
+          total: 1100,
+          tax: 50,
+          discount: 0,
+          tip: 100,
+          lines: [
+            line("L1", {
+              name: "Gouda",
+              catalogObjectId: VAR,
+              quantity: "1",
+              gross: 1000,
+              tax: 50,
+              total: 1000,
+            }),
+            line("L2", {
+              name: "Custom",
+              quantity: "1",
+              gross: 0,
+              total: 0,
+            }),
+          ],
+        }),
+        returnOnlyOrder(ORDER_RECON_RETURN, -1525, -175),
+      ],
+      payments: [
+        payment(PAY_RECON, ORDER_RECON, {
+          amount: 1000,
+          tip: 100,
+          fee: 30,
+          method: "CARD",
+        }),
+      ],
+      refunds: [refund(REF_RECON, PAY_RECON, ORDER_RECON, 200)],
+    });
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const clean = await reconcilor.reconcileWindow({ date: FARM_DATE });
+    if (!clean.passed) {
+      throw new Error(
+        `expected clean reconciliation PASS, got ${clean.differences.join("; ")}`,
+      );
+    }
+    if (clean.totals.returnOnlyOrders !== 1 || clean.totals.invalidOrders !== 0) {
+      throw new Error("return-only order must not fail reconciliation");
+    }
+    if (clean.totals.unresolvedVariations !== 0) {
+      throw new Error("mapped variation must not count as unresolved");
+    }
+    console.log("- clean reconciliation passes; return-only does not fail");
+
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_RECON, {
+          total: 1100,
+          tax: 50,
+          tip: 100,
+          version: 2,
+          updatedAt: "2026-09-15T18:00:00.000Z",
+          lines: [
+            line("L1", {
+              name: "Gouda",
+              catalogObjectId: VAR,
+              quantity: "1",
+              gross: 1000,
+              tax: 50,
+              total: 1000,
+            }),
+          ],
+        }),
+      ],
+    });
+    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const afterLineRemoval = await reconcilor.reconcileWindow({ date: FARM_DATE });
+    if (!afterLineRemoval.passed) {
+      throw new Error("inactive lines that match newer source state must not fail");
+    }
+    if (afterLineRemoval.totals.inactiveCanonicalLines !== 1) {
+      throw new Error("expected one inactive canonical line after source removal");
+    }
+    console.log("- inactive lines matching newer source state do not fail");
 
     await cleanup(database);
     console.log("");

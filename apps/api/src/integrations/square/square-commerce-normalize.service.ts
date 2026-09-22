@@ -10,8 +10,10 @@ import {
 } from "./square.constants";
 import { SquareCommerceNormalizer } from "./square-commerce-normalizer";
 import {
-  instantInUtcRange,
-  snapshotWindowInstant,
+  pickLatestSnapshots,
+  type SquareSnapshotRow,
+} from "./square.commerce.snapshots";
+import {
   squareFarmUtcRange,
   type SquareFarmWindow,
 } from "./square.range";
@@ -28,13 +30,6 @@ export type SquareCommerceNormalizeSummary = {
   invalidProcessingFees: number;
   returnOnlyOrdersSkipped: number;
   invalidOrderMoneySkipped: number;
-};
-
-type LatestSnapshot = {
-  id: string;
-  externalId: string;
-  payload: Record<string, unknown>;
-  observedAt: Date;
 };
 
 @Injectable()
@@ -125,7 +120,7 @@ export class SquareCommerceNormalizeService {
   private async latestInRange(
     entityType: string,
     range: { startAt: string; endAt: string },
-  ): Promise<LatestSnapshot[]> {
+  ): Promise<SquareSnapshotRow[]> {
     const rows = await this.database.db
       .select({
         id: sourceSnapshots.id,
@@ -141,37 +136,6 @@ export class SquareCommerceNormalizeService {
         ),
       );
 
-    const latest = new Map<string, LatestSnapshot>();
-    for (const row of rows) {
-      const windowInstant = snapshotWindowInstant(entityType, row.payload);
-      if (!instantInUtcRange(windowInstant, range)) {
-        continue;
-      }
-      const existing = latest.get(row.externalId);
-      if (!existing) {
-        latest.set(row.externalId, row);
-        continue;
-      }
-      if (row.observedAt.getTime() > existing.observedAt.getTime()) {
-        latest.set(row.externalId, row);
-        continue;
-      }
-      if (row.observedAt.getTime() === existing.observedAt.getTime()) {
-        const rowUpdated = timestampMs(row.payload.updated_at);
-        const existingUpdated = timestampMs(existing.payload.updated_at);
-        if (rowUpdated > existingUpdated) {
-          latest.set(row.externalId, row);
-        }
-      }
-    }
-    return [...latest.values()];
+    return pickLatestSnapshots(rows, entityType, range);
   }
-}
-
-function timestampMs(value: unknown): number {
-  if (typeof value !== "string") {
-    return 0;
-  }
-  const time = Date.parse(value);
-  return Number.isNaN(time) ? 0 : time;
 }

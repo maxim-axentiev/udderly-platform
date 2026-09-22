@@ -166,9 +166,10 @@ Farm calendar dates are `America/Toronto`. Production commands run compiled dist
 ```
 npm run import:square-commerce -- --date 2026-09-15
 npm run normalize:square-commerce -- --date 2026-09-15
+npm run reconcile:square-commerce -- --date 2026-09-15
 ```
 
-Also `--from YYYY-MM-DD --to YYYY-MM-DD` (inclusive). `:dev` variants use `tsx`. Import writes sanitized `source_snapshot` rows only. Normalize is a separate command. Fetch uses the existing location id and follows Square cursors until omitted.
+Also `--from YYYY-MM-DD --to YYYY-MM-DD` (inclusive). `:dev` variants use `tsx`. Import writes sanitized `source_snapshot` rows only. Normalize is a separate command. Reconcile is **read-only**: it compares those snapshots to canonical rows and writes nothing. Fetch uses the existing location id and follows Square cursors until omitted.
 
 `--date 2026-09-15` for **orders** means Square `closed_at` in that America/Toronto farm day (half-open UTC). That matches `sale.occurred_at` (`closed_at` when present). SearchOrders uses `date_time_filter.closed_at` (Square allows only one of created_at / updated_at / closed_at per request). COMPLETED and CANCELED orders that closed that day are included, even if `created_at` was earlier. An order created that day but closed the next day is **not** a sale for `--date`. OPEN/DRAFT orders typically have no `closed_at` and are **not** fetched by this command; they are not mixed into historical closed-sale reporting.
 
@@ -258,6 +259,17 @@ No PERSON. `customer_id` becomes unresolved `source_identity`. No Instant Profil
 One transaction per order (sale + current lines + identities). One transaction per payment. One transaction per refund. Newest snapshot (`observed_at`, then `updated_at`, then `version`) wins; older apply is `skipped_stale`. Unchanged sanitized payloads do not insert extra snapshots.
 
 Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Return-only orders skipped` and `Invalid order money skipped` separately. Ordinary normalize does not delete previously created sales.
+
+### Reconciliation (read-only)
+
+```
+npm run reconcile:square-commerce -- --from 2026-09-09 --to 2026-09-15
+npm run reconcile:square-commerce -- --date 2026-09-12
+```
+
+Compares latest `source_snapshot` rows in the America/Toronto farm window to canonical sales, lines, payments, and refunds. It does not write. Money rules are the same as normalize (gross top-level sale totals excluding tip; return-only is not a sale; payment `amount_money` / `tip_money`; nonnegative net processing-fee cost; separate refunds).
+
+PASS requires matching source/canonical counts and money, `Invalid orders: 0`, and `Unresolved variations: 0`. Return-only orders are valid and do not fail. Inactive lines do not fail when they match the current source line set. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
 
 Synthetic tests (no live Square API):
 

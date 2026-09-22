@@ -8,6 +8,7 @@ import { SquareCatalogNormalizeService } from "./square-catalog-normalize.servic
 import { SquareCommerceImportService } from "./square-commerce-import.service";
 import { SquareCommerceNormalizer } from "./square-commerce-normalizer";
 import { SquareCommerceNormalizeService } from "./square-commerce-normalize.service";
+import { SquareCommerceReconcileService } from "./square-commerce-reconcile.service";
 
 @Module({
   imports: [DatabaseModule],
@@ -20,6 +21,7 @@ import { SquareCommerceNormalizeService } from "./square-commerce-normalize.serv
     SquareCommerceImportService,
     SquareCommerceNormalizer,
     SquareCommerceNormalizeService,
+    SquareCommerceReconcileService,
   ],
   exports: [
     SquareService,
@@ -27,6 +29,7 @@ import { SquareCommerceNormalizeService } from "./square-commerce-normalize.serv
     SquareCatalogNormalizeService,
     SquareCommerceImportService,
     SquareCommerceNormalizeService,
+    SquareCommerceReconcileService,
   ],
 })
 export class SquareModule {}
