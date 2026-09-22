@@ -96,7 +96,9 @@ export class SquareCommerceReconcileService {
     for (const order of grossOrders) {
       for (const line of nestedArray(order.payload.line_items)) {
         const catalogObjectId = stringValue(line.catalog_object_id);
-        if (catalogObjectId && !resolvedVariations.has(catalogObjectId)) {
+        if (!catalogObjectId) {
+          totals.customNonCatalogLines += 1;
+        } else if (!resolvedVariations.has(catalogObjectId)) {
           totals.unresolvedVariations += 1;
         }
       }

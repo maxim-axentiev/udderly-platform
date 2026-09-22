@@ -23,6 +23,7 @@ export type SquareCommerceNormalizeSummary = {
   lineItems: number;
   payments: number;
   refunds: number;
+  customNonCatalogLines: number;
   unresolvedCatalogLines: number;
   unresolvedPayments: number;
   unresolvedRefunds: number;
@@ -60,6 +61,7 @@ export class SquareCommerceNormalizeService {
       lineItems: 0,
       payments: 0,
       refunds: 0,
+      customNonCatalogLines: 0,
       unresolvedCatalogLines: 0,
       unresolvedPayments: 0,
       unresolvedRefunds: 0,
@@ -77,6 +79,7 @@ export class SquareCommerceNormalizeService {
       if (result.outcome === "applied" && result.kind === "sale") {
         summary.sales += 1;
         summary.lineItems += result.lineItems ?? 0;
+        summary.customNonCatalogLines += result.customNonCatalogLines ?? 0;
         summary.unresolvedCatalogLines += result.unresolvedCatalogLines ?? 0;
       } else if (result.outcome === "skipped_return_only") {
         summary.returnOnlyOrdersSkipped += 1;

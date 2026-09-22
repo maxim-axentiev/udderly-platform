@@ -49,6 +49,7 @@ export type SquareCommerceApplyResult =
       outcome: "applied";
       kind: "sale" | "payment" | "refund";
       unresolvedCatalogLines?: number;
+      customNonCatalogLines?: number;
       lineItems?: number;
       invalidProcessingFee?: boolean;
     }
@@ -233,6 +234,7 @@ export class SquareCommerceNormalizer {
       kind: "sale",
       lineItems: lineResult.lineItems,
       unresolvedCatalogLines: lineResult.unresolvedCatalogLines,
+      customNonCatalogLines: lineResult.customNonCatalogLines,
     };
   }
 
@@ -242,12 +244,17 @@ export class SquareCommerceNormalizer {
     orderId: string,
     payload: Record<string, unknown>,
     fallbackCurrency: string,
-  ): Promise<{ lineItems: number; unresolvedCatalogLines: number }> {
+  ): Promise<{
+    lineItems: number;
+    unresolvedCatalogLines: number;
+    customNonCatalogLines: number;
+  }> {
     const rawLines = Array.isArray(payload.line_items)
       ? payload.line_items.filter(isPlainObject)
       : [];
     const seen = new Set<string>();
     let unresolvedCatalogLines = 0;
+    let customNonCatalogLines = 0;
     const now = new Date();
 
     for (const [index, line] of rawLines.entries()) {
@@ -264,10 +271,9 @@ export class SquareCommerceNormalizer {
       const resolved = catalogObjectId
         ? await this.resolveVariation(db, catalogObjectId)
         : undefined;
-      if (catalogObjectId && !resolved) {
-        unresolvedCatalogLines += 1;
-      }
       if (!catalogObjectId) {
+        customNonCatalogLines += 1;
+      } else if (!resolved) {
         unresolvedCatalogLines += 1;
       }
 
@@ -348,7 +354,11 @@ export class SquareCommerceNormalizer {
       .where(eq(saleLineItems.saleId, saleId));
     const existingIds = existing.map((row) => row.id);
     if (existingIds.length === 0) {
-      return { lineItems: rawLines.length, unresolvedCatalogLines };
+      return {
+        lineItems: rawLines.length,
+        unresolvedCatalogLines,
+        customNonCatalogLines,
+      };
     }
 
     const identities = await db
@@ -379,7 +389,11 @@ export class SquareCommerceNormalizer {
         .where(eq(saleLineItems.id, identity.internalEntityId));
     }
 
-    return { lineItems: rawLines.length, unresolvedCatalogLines };
+    return {
+      lineItems: rawLines.length,
+      unresolvedCatalogLines,
+      customNonCatalogLines,
+    };
   }
 
   private async applyPayment(

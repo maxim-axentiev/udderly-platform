@@ -32,6 +32,8 @@ async function main(): Promise<void> {
     }
     console.log(`Sales: ${result.sales}`);
     console.log(`Line items: ${result.lineItems}`);
+    console.log(`Custom/non-catalog lines: ${result.customNonCatalogLines}`);
+    console.log(`Unresolved catalog lines: ${result.unresolvedCatalogLines}`);
     console.log(`Payments: ${result.payments}`);
     console.log(`Refunds: ${result.refunds}`);
     console.log(`Return-only orders skipped: ${result.returnOnlyOrdersSkipped}`);
@@ -39,7 +41,6 @@ async function main(): Promise<void> {
       `Return-adjustment non-sales skipped: ${result.returnAdjustmentNonSalesSkipped}`,
     );
     console.log(`Invalid order money skipped: ${result.invalidOrderMoneySkipped}`);
-    console.log(`Unresolved catalog lines: ${result.unresolvedCatalogLines}`);
     console.log(`Unresolved payments: ${result.unresolvedPayments}`);
     console.log(`Unresolved refunds: ${result.unresolvedRefunds}`);
     console.log(

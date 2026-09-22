@@ -12,6 +12,7 @@ export type SquareCommerceReconcileTotals = {
   canonicalLineItems: number;
   activeCanonicalLines: number;
   inactiveCanonicalLines: number;
+  customNonCatalogLines: number;
   unresolvedVariations: number;
   sourceGrossSaleTotal: number;
   canonicalSaleTotal: number;
@@ -138,6 +139,7 @@ export function formatSquareCommerceReconcile(
     `Canonical line items: ${t.canonicalLineItems}`,
     `Active canonical lines: ${t.activeCanonicalLines}`,
     `Inactive canonical lines: ${t.inactiveCanonicalLines}`,
+    `Custom/non-catalog lines: ${t.customNonCatalogLines}`,
     `Unresolved variations: ${t.unresolvedVariations}`,
     "",
     "Sales money",
@@ -193,6 +195,7 @@ export function emptyReconcileTotals(
     canonicalLineItems: 0,
     activeCanonicalLines: 0,
     inactiveCanonicalLines: 0,
+    customNonCatalogLines: 0,
     unresolvedVariations: 0,
     sourceGrossSaleTotal: 0,
     canonicalSaleTotal: 0,

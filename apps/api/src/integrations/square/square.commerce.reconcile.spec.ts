@@ -43,6 +43,22 @@ test("clean reconciliation including return-only is PASS", () => {
   assert.equal(report.includes("@"), false);
 });
 
+test("E. reconciliation with a custom/non-catalog line is PASS", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourceLineItems: 2,
+      canonicalLineItems: 2,
+      activeCanonicalLines: 2,
+      customNonCatalogLines: 1,
+    }),
+  );
+  assert.equal(verdict.passed, true);
+  assert.match(
+    formatSquareCommerceReconcile(verdict),
+    /Custom\/non-catalog lines: 1/,
+  );
+});
+
 test("return-adjustment non-sale does not cause FAIL", () => {
   const verdict = evaluateSquareCommerceReconciliation(
     totals({
@@ -117,7 +133,7 @@ test("invalid order is FAIL", () => {
   assert.match(verdict.differences.join("\n"), /Invalid orders: 1/);
 });
 
-test("unresolved variation is FAIL", () => {
+test("F. unresolved catalog-bearing line is FAIL", () => {
   const verdict = evaluateSquareCommerceReconciliation(
     totals({ unresolvedVariations: 1 }),
   );

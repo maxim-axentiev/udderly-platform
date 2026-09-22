@@ -247,7 +247,7 @@ Provider `state` is stored lowercased (`COMPLETED` → `completed`, `CANCELED` �
 
 ### Line items
 
-`catalog_object_id` resolves `square` / `item_variation` / id → `product_variation` → `product`. Missing or unknown catalog ids leave product FKs null; the line still exists. Quantity is Square’s decimal string. Identity is order id + Square line `uid`. Lines without uid use `<order.id>:version:<order.version>:pos:<index>` so a later version cannot reuse an older positional identity. Description is not identity.
+`catalog_object_id` resolves `square` / `item_variation` / id → `product_variation` → `product`. A line with no usable `catalog_object_id` is a custom/non-catalog line: it still creates `sale_line_item` with null product FKs. A line that has a catalog id but cannot resolve that exact variation identity is an unresolved catalog line. Quantity is Square’s decimal string. Identity is order id + Square line `uid`. Lines without uid use `<order.id>:version:<order.version>:pos:<index>` so a later version cannot reuse an older positional identity. Description is not identity.
 
 The latest order payload is the current line set. Lines no longer present are `is_active=false` with `removed_at` set (`0007_sale_line_item_lifecycle`; `0006` untouched).
 
@@ -265,7 +265,7 @@ No PERSON. `customer_id` becomes unresolved `source_identity`. No Instant Profil
 
 One transaction per order (sale + current lines + identities). One transaction per payment. One transaction per refund. Newest snapshot (`observed_at`, then `updated_at`, then `version`) wins; older apply is `skipped_stale`. Unchanged sanitized payloads do not insert extra snapshots.
 
-Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Return-only orders skipped`, `Return-adjustment non-sales skipped`, and `Invalid order money skipped` separately. Ordinary normalize does not delete previously created sales.
+Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Custom/non-catalog lines` separately from `Unresolved catalog lines`. It also reports `Return-only orders skipped`, `Return-adjustment non-sales skipped`, and `Invalid order money skipped` separately. Ordinary normalize does not delete previously created sales.
 
 ### Reconciliation (read-only)
 
@@ -276,7 +276,7 @@ npm run reconcile:square-commerce -- --date 2026-09-12
 
 Compares latest `source_snapshot` rows in the America/Toronto farm window to canonical sales, lines, payments, and refunds. It does not write. Money rules are the same as normalize (gross top-level sale totals excluding tip; return-only and return-adjustment non-sales are not sales; payment `amount_money` / `tip_money`; nonnegative net processing-fee cost; separate refunds).
 
-PASS requires matching source/canonical counts and money, `Invalid orders: 0`, and `Unresolved variations: 0`. Return-only orders and return-adjustment non-sales are valid provider records and do not fail. Inactive lines do not fail when they match the current source line set. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
+PASS requires matching source/canonical counts and money, `Invalid orders: 0`, and `Unresolved variations: 0`. Custom/non-catalog lines are valid and do not fail. Return-only orders and return-adjustment non-sales are valid provider records and do not fail. Inactive lines do not fail when they match the current source line set. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
 
 ### Return evidence inspect (read-only)
 

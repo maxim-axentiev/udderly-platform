@@ -58,6 +58,7 @@ const REF_A = "SYN-SQ-COM-REF-A";
 const ORDER_RECON = "SYN-SQ-COM-RECON-ORDER";
 const ORDER_RECON_RETURN = "SYN-SQ-COM-RECON-RETURN";
 const ORDER_RECON_ADJUSTMENT = "SYN-SQ-COM-RECON-ADJUSTMENT";
+const ORDER_RECON_UNRESOLVED = "SYN-SQ-COM-RECON-UNRESOLVED";
 const PAY_RECON = "SYN-SQ-COM-RECON-PAY";
 const REF_RECON = "SYN-SQ-COM-RECON-REF";
 const ORDER_RETURN_EVIDENCE = "SYN-SQ-COM-RETURN-EVIDENCE";
@@ -93,6 +94,7 @@ const ALL_EXTERNAL_IDS = [
   ORDER_RECON,
   ORDER_RECON_RETURN,
   ORDER_RECON_ADJUSTMENT,
+  ORDER_RECON_UNRESOLVED,
   PAY_RECON,
   REF_RECON,
   ORDER_RETURN_EVIDENCE,
@@ -289,6 +291,12 @@ async function main(): Promise<void> {
     }
     if (firstNorm.invalidOrderMoneySkipped !== 1) {
       throw new Error("expected 1 invalid-order-money skip");
+    }
+    if (firstNorm.customNonCatalogLines !== 4) {
+      throw new Error("missing catalog_object_id must count as custom, not unresolved");
+    }
+    if (firstNorm.unresolvedCatalogLines !== 0) {
+      throw new Error("resolved catalog lines must not count as unresolved");
     }
 
     const saleA = await loadSale(database, ORDER_A);
@@ -622,6 +630,9 @@ async function main(): Promise<void> {
     if (second.returnOnlyOrdersSkipped !== 2 || second.invalidOrderMoneySkipped !== 1) {
       throw new Error("return-only and invalid-money counters must stay idempotent");
     }
+    if (second.unresolvedCatalogLines !== 0 || second.customNonCatalogLines !== 3) {
+      throw new Error("custom vs unresolved catalog counters must stay idempotent");
+    }
     if (second.sales !== 10) {
       throw new Error("repeated normalize must not turn return-only orders into sales");
     }
@@ -694,6 +705,12 @@ async function main(): Promise<void> {
     if (reconNorm.invalidOrderMoneySkipped !== 0) {
       throw new Error("return-adjustment must not count as invalid order money");
     }
+    if (reconNorm.customNonCatalogLines !== 1) {
+      throw new Error("recon window must report one custom/non-catalog line");
+    }
+    if (reconNorm.unresolvedCatalogLines !== 0) {
+      throw new Error("mapped catalog line must not count as unresolved");
+    }
     if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_RECON_ADJUSTMENT)) {
       throw new Error("return-adjustment non-sale must not create a canonical sale");
     }
@@ -722,6 +739,9 @@ async function main(): Promise<void> {
     }
     if (clean.totals.unresolvedVariations !== 0) {
       throw new Error("mapped variation must not count as unresolved");
+    }
+    if (clean.totals.customNonCatalogLines !== 1) {
+      throw new Error("custom/non-catalog line must be reported and not fail");
     }
     const reconRefund = await loadRefund(database, REF_RECON);
     if (reconRefund.amount !== 200) {
@@ -759,6 +779,55 @@ async function main(): Promise<void> {
       throw new Error("expected one inactive canonical line after source removal");
     }
     console.log("- inactive lines matching newer source state do not fail");
+
+    await cleanup(database);
+    await seedCatalog(database);
+    await importer.persistCommerceObjects({
+      orders: [
+        order(ORDER_RECON_UNRESOLVED, {
+          total: 400,
+          lines: [
+            line("L1", {
+              name: "Unknown catalog item",
+              catalogObjectId: "SYN-SQ-COM-MISSING-VAR",
+              quantity: "1",
+              gross: 400,
+              total: 400,
+            }),
+          ],
+        }),
+      ],
+    });
+    const unresolvedNorm = await normalizer.normalizeWindow({ date: FARM_DATE });
+    if (unresolvedNorm.sales !== 1) {
+      throw new Error("catalog-bearing unresolved line must still create a sale");
+    }
+    if (unresolvedNorm.customNonCatalogLines !== 0) {
+      throw new Error("catalog_object_id present must not count as custom");
+    }
+    if (unresolvedNorm.unresolvedCatalogLines !== 1) {
+      throw new Error("missing variation identity must count as unresolved");
+    }
+    const unresolvedSale = await loadSale(database, ORDER_RECON_UNRESOLVED);
+    const unresolvedLines = await listLines(database, unresolvedSale.id);
+    if (
+      unresolvedLines.length !== 1 ||
+      unresolvedLines[0]?.productId ||
+      unresolvedLines[0]?.productVariationId
+    ) {
+      throw new Error("unresolved catalog line must persist with null product refs");
+    }
+    const unresolvedRecon = await reconcilor.reconcileWindow({ date: FARM_DATE });
+    if (unresolvedRecon.passed) {
+      throw new Error("unresolved catalog-bearing line must fail reconciliation");
+    }
+    if (unresolvedRecon.totals.unresolvedVariations !== 1) {
+      throw new Error("unresolved catalog-bearing line must count as unresolved");
+    }
+    if (unresolvedRecon.totals.customNonCatalogLines !== 0) {
+      throw new Error("unresolved catalog line must not count as custom");
+    }
+    console.log("- unresolved catalog-bearing line fails reconciliation");
 
     await cleanup(database);
     const returnEvidence = invalidReturnEvidenceOrder(ORDER_RETURN_EVIDENCE, 1375);
