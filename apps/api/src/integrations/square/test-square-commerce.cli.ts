@@ -57,6 +57,7 @@ const REF_GROSS = "SYN-SQ-COM-REF-GROSS";
 const REF_A = "SYN-SQ-COM-REF-A";
 const ORDER_RECON = "SYN-SQ-COM-RECON-ORDER";
 const ORDER_RECON_RETURN = "SYN-SQ-COM-RECON-RETURN";
+const ORDER_RECON_ADJUSTMENT = "SYN-SQ-COM-RECON-ADJUSTMENT";
 const PAY_RECON = "SYN-SQ-COM-RECON-PAY";
 const REF_RECON = "SYN-SQ-COM-RECON-REF";
 const ORDER_RETURN_EVIDENCE = "SYN-SQ-COM-RETURN-EVIDENCE";
@@ -91,6 +92,7 @@ const ALL_EXTERNAL_IDS = [
   REF_A,
   ORDER_RECON,
   ORDER_RECON_RETURN,
+  ORDER_RECON_ADJUSTMENT,
   PAY_RECON,
   REF_RECON,
   ORDER_RETURN_EVIDENCE,
@@ -667,6 +669,7 @@ async function main(): Promise<void> {
           ],
         }),
         returnOnlyOrder(ORDER_RECON_RETURN, -1525, -175),
+        invalidReturnEvidenceOrder(ORDER_RECON_ADJUSTMENT, 1375),
       ],
       payments: [
         payment(PAY_RECON, ORDER_RECON, {
@@ -678,7 +681,30 @@ async function main(): Promise<void> {
       ],
       refunds: [refund(REF_RECON, PAY_RECON, ORDER_RECON, 200)],
     });
-    await normalizer.normalizeWindow({ date: FARM_DATE });
+    const reconNorm = await normalizer.normalizeWindow({ date: FARM_DATE });
+    if (reconNorm.sales !== 1) {
+      throw new Error("recon window must create exactly one sale");
+    }
+    if (reconNorm.returnOnlyOrdersSkipped !== 1) {
+      throw new Error("expected one return-only skip in recon window");
+    }
+    if (reconNorm.returnAdjustmentNonSalesSkipped !== 1) {
+      throw new Error("expected one return-adjustment non-sale skip");
+    }
+    if (reconNorm.invalidOrderMoneySkipped !== 0) {
+      throw new Error("return-adjustment must not count as invalid order money");
+    }
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_RECON_ADJUSTMENT)) {
+      throw new Error("return-adjustment non-sale must not create a canonical sale");
+    }
+    const reconAgain = await normalizer.normalizeWindow({ date: FARM_DATE });
+    if (
+      reconAgain.sales !== 1 ||
+      reconAgain.returnAdjustmentNonSalesSkipped !== 1 ||
+      reconAgain.returnOnlyOrdersSkipped !== 1
+    ) {
+      throw new Error("return-adjustment normalize must remain idempotent");
+    }
     const clean = await reconcilor.reconcileWindow({ date: FARM_DATE });
     if (!clean.passed) {
       throw new Error(
@@ -688,10 +714,20 @@ async function main(): Promise<void> {
     if (clean.totals.returnOnlyOrders !== 1 || clean.totals.invalidOrders !== 0) {
       throw new Error("return-only order must not fail reconciliation");
     }
+    if (clean.totals.returnAdjustmentNonSales !== 1) {
+      throw new Error("return-adjustment non-sale must not fail reconciliation");
+    }
+    if (clean.totals.sourceOrders !== 3 || clean.totals.grossSaleOrders !== 1) {
+      throw new Error("recon window order classification counts are wrong");
+    }
     if (clean.totals.unresolvedVariations !== 0) {
       throw new Error("mapped variation must not count as unresolved");
     }
-    console.log("- clean reconciliation passes; return-only does not fail");
+    const reconRefund = await loadRefund(database, REF_RECON);
+    if (reconRefund.amount !== 200) {
+      throw new Error("refund must still normalize independently");
+    }
+    console.log("- clean reconciliation passes; return-only and return-adjustment do not fail");
 
     await importer.persistCommerceObjects({
       orders: [
@@ -747,6 +783,16 @@ async function main(): Promise<void> {
     const evidenceSnapshots = await countSnapshots(database, [ORDER_RETURN_EVIDENCE]);
     if (evidenceSnapshots !== 2) {
       throw new Error("old return-evidence snapshot must be retained");
+    }
+    const adjustmentNorm = await normalizer.normalizeWindow({ date: FARM_DATE });
+    if (adjustmentNorm.returnAdjustmentNonSalesSkipped !== 1) {
+      throw new Error("return-adjustment snapshot must skip sale creation");
+    }
+    if (adjustmentNorm.sales !== 0) {
+      throw new Error("return-adjustment must not create a sale");
+    }
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_RETURN_EVIDENCE)) {
+      throw new Error("return-adjustment snapshot must remain source evidence only");
     }
     console.log("- return evidence snapshots are hash-idempotent and versioned");
 

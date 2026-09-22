@@ -196,13 +196,20 @@ Sanitized refund fields: `id`, `payment_id`, `order_id`, `location_id`, `status`
 | refund.id | `square` / `refund` / id | `refund` |
 | customer.id | `square` / `customer` / id | unresolved (`internal_*` null) |
 
-A Square **order is not automatically a canonical sale**.
+A Square provider order can represent:
+- a canonical sale
+- return-only evidence
+- return-adjustment non-sale evidence
+- an invalid/unrepresentable order
+
+Only canonical sales create `sale` rows.
 
 - Original/gross order (usable top-level `total_money`) → `sale`. Zero line items is still a sale if gross money is present. Do not invent a fake line.
 - Return-only order (no usable top-level `total_money`, `net_amounts.total_money` < 0) → **not** a sale. Keep the `source_snapshot`. Do not create a $0 or negative sale. Do not abs the net amount.
-- Other missing/unusable gross money → skip as invalid/unrepresentable order money and count it. Do not treat it as return-only.
+- Return-adjustment non-sale (no usable top-level `total_money`, valid net total = 0, empty current lines, at least one `returns[]` object, and explicit `return_amounts` and/or returned component counts) → **not** a sale. Keep the snapshot. Do not treat arbitrary zero-net orders this way.
+- Other missing/unusable gross money → skip as invalid/unrepresentable order money and count it.
 
-`sale` is not `payment`. Refunds are not negative payments. A Square **refund** still creates a canonical `refund` even when a related return-only order is skipped.
+`sale` is not `payment`. Refunds are not negative payments. A Square **refund** still creates a canonical `refund` even when a related return-only or return-adjustment order is skipped.
 
 Ordinary normalize does not delete legacy sales that were incorrectly created from return-only orders.
 
@@ -224,7 +231,7 @@ Canonical Square **sale** fields are original/gross order economics from **top-l
 
 `net_amounts` is post-return/net provider evidence. It is stored on the snapshot but **must not** set canonical sale fields. Using `net_amounts` as the sale total plus recording refunds would count returns twice.
 
-Square return-only orders (no usable top-level `total_money`, negative `net_amounts.total_money`) stay as snapshot evidence only. Canonical refunds come from the Refunds API, not from abs(net) or a $0 sale.
+Square return-only orders (no usable top-level `total_money`, negative `net_amounts.total_money`) stay as snapshot evidence only. Return-adjustment non-sales (zero net total with explicit sanitized return evidence) also stay as snapshot evidence only. Canonical refunds come from the Refunds API, not from abs(net) or a $0 sale.
 
 Reporting:
 
@@ -258,7 +265,7 @@ No PERSON. `customer_id` becomes unresolved `source_identity`. No Instant Profil
 
 One transaction per order (sale + current lines + identities). One transaction per payment. One transaction per refund. Newest snapshot (`observed_at`, then `updated_at`, then `version`) wins; older apply is `skipped_stale`. Unchanged sanitized payloads do not insert extra snapshots.
 
-Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Return-only orders skipped` and `Invalid order money skipped` separately. Ordinary normalize does not delete previously created sales.
+Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Return-only orders skipped`, `Return-adjustment non-sales skipped`, and `Invalid order money skipped` separately. Ordinary normalize does not delete previously created sales.
 
 ### Reconciliation (read-only)
 
@@ -267,9 +274,9 @@ npm run reconcile:square-commerce -- --from 2026-09-09 --to 2026-09-15
 npm run reconcile:square-commerce -- --date 2026-09-12
 ```
 
-Compares latest `source_snapshot` rows in the America/Toronto farm window to canonical sales, lines, payments, and refunds. It does not write. Money rules are the same as normalize (gross top-level sale totals excluding tip; return-only is not a sale; payment `amount_money` / `tip_money`; nonnegative net processing-fee cost; separate refunds).
+Compares latest `source_snapshot` rows in the America/Toronto farm window to canonical sales, lines, payments, and refunds. It does not write. Money rules are the same as normalize (gross top-level sale totals excluding tip; return-only and return-adjustment non-sales are not sales; payment `amount_money` / `tip_money`; nonnegative net processing-fee cost; separate refunds).
 
-PASS requires matching source/canonical counts and money, `Invalid orders: 0`, and `Unresolved variations: 0`. Return-only orders are valid and do not fail. Inactive lines do not fail when they match the current source line set. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
+PASS requires matching source/canonical counts and money, `Invalid orders: 0`, and `Unresolved variations: 0`. Return-only orders and return-adjustment non-sales are valid provider records and do not fail. Inactive lines do not fail when they match the current source line set. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
 
 ### Return evidence inspect (read-only)
 

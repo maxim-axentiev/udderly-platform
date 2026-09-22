@@ -29,6 +29,7 @@ export type SquareCommerceNormalizeSummary = {
   skippedStale: number;
   invalidProcessingFees: number;
   returnOnlyOrdersSkipped: number;
+  returnAdjustmentNonSalesSkipped: number;
   invalidOrderMoneySkipped: number;
 };
 
@@ -65,6 +66,7 @@ export class SquareCommerceNormalizeService {
       skippedStale: 0,
       invalidProcessingFees: 0,
       returnOnlyOrdersSkipped: 0,
+      returnAdjustmentNonSalesSkipped: 0,
       invalidOrderMoneySkipped: 0,
     };
 
@@ -78,6 +80,8 @@ export class SquareCommerceNormalizeService {
         summary.unresolvedCatalogLines += result.unresolvedCatalogLines ?? 0;
       } else if (result.outcome === "skipped_return_only") {
         summary.returnOnlyOrdersSkipped += 1;
+      } else if (result.outcome === "skipped_return_adjustment_non_sale") {
+        summary.returnAdjustmentNonSalesSkipped += 1;
       } else if (result.outcome === "skipped_invalid_order_money") {
         summary.invalidOrderMoneySkipped += 1;
       } else if (result.outcome === "skipped_stale") {

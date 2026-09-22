@@ -16,17 +16,20 @@ export type SquareSaleMoney = {
 export type SquareOrderMoneyClassification =
   | { kind: "sale"; money: SquareSaleMoney }
   | { kind: "return_only"; netTotal: number }
+  | { kind: "return_adjustment_non_sale"; netTotal: 0 }
   | { kind: "invalid_order_money" };
 
 /**
  * Classify Square order money for canonical sale mapping.
  *
- * Return-only (provider evidence, not a sale): top-level `total_money` amount
- * is absent/unusable AND `net_amounts.total_money` is a finite amount < 0.
- * Do not abs that net, do not store a $0/negative sale.
+ * gross sale: usable top-level `total_money`.
+ * return-only: missing/unusable gross AND valid `net_amounts.total_money` < 0.
+ * return-adjustment non-sale: missing/unusable gross, valid net total = 0,
+ *   empty current line_items, at least one `returns[]` object, and explicit
+ *   return evidence (`return_amounts` and/or returned component counts).
+ * invalid order money: anything else that cannot safely be a sale.
  *
- * Missing gross with zero, positive, or unreadable net is invalid order money,
- * not return-only.
+ * Do not abs net amounts. Do not store a $0/negative sale.
  */
 export function classifySquareOrderMoney(
   order: Record<string, unknown>,
@@ -37,6 +40,9 @@ export function classifySquareOrderMoney(
     if (netTotal !== undefined && netTotal < 0) {
       return { kind: "return_only", netTotal };
     }
+    if (netTotal === 0 && isReturnAdjustmentNonSale(order)) {
+      return { kind: "return_adjustment_non_sale", netTotal: 0 };
+    }
     return { kind: "invalid_order_money" };
   }
 
@@ -45,6 +51,61 @@ export function classifySquareOrderMoney(
     return { kind: "invalid_order_money" };
   }
   return { kind: "sale", money };
+}
+
+function isReturnAdjustmentNonSale(order: Record<string, unknown>): boolean {
+  if (nestedArray(order.line_items).length > 0) {
+    return false;
+  }
+  const returns = nestedArray(order.returns).filter(
+    (entry): entry is Record<string, unknown> =>
+      Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
+  );
+  if (returns.length === 0) {
+    return false;
+  }
+  if (hasMoneyParts(nestedObject(order.return_amounts))) {
+    return true;
+  }
+  return returns.some(
+    (entry) =>
+      hasMoneyParts(nestedObject(entry.return_amounts)) ||
+      componentCount(entry, "return_line_item_count", "return_line_items") > 0 ||
+      componentCount(entry, "return_discount_count", "return_discounts") > 0 ||
+      componentCount(entry, "return_tax_count", "return_taxes") > 0 ||
+      componentCount(entry, "return_service_charge_count", "return_service_charges") >
+        0 ||
+      componentCount(entry, "return_tip_count", "return_tips") > 0,
+  );
+}
+
+function hasMoneyParts(value: Record<string, unknown> | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  return (
+    moneyAmount(value.total_money) !== undefined ||
+    moneyAmount(value.tax_money) !== undefined ||
+    moneyAmount(value.discount_money) !== undefined ||
+    moneyAmount(value.tip_money) !== undefined ||
+    moneyAmount(value.service_charge_money) !== undefined
+  );
+}
+
+function componentCount(
+  entry: Record<string, unknown>,
+  countKey: string,
+  arrayKey: string,
+): number {
+  const counted = entry[countKey];
+  if (typeof counted === "number" && Number.isFinite(counted) && counted > 0) {
+    return Math.trunc(counted);
+  }
+  return nestedArray(entry[arrayKey]).length;
+}
+
+function nestedArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
 }
 
 /**

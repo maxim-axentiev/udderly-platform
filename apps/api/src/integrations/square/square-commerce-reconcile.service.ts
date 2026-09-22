@@ -82,6 +82,8 @@ export class SquareCommerceReconcileService {
         totals.sourceLineItems += nestedArray(order.payload.line_items).length;
       } else if (classified.kind === "return_only") {
         totals.returnOnlyOrders += 1;
+      } else if (classified.kind === "return_adjustment_non_sale") {
+        totals.returnAdjustmentNonSales += 1;
       } else {
         totals.invalidOrders += 1;
       }

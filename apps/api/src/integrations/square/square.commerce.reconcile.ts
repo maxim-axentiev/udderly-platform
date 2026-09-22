@@ -5,6 +5,7 @@ export type SquareCommerceReconcileTotals = {
   sourceOrders: number;
   grossSaleOrders: number;
   returnOnlyOrders: number;
+  returnAdjustmentNonSales: number;
   invalidOrders: number;
   canonicalSales: number;
   sourceLineItems: number;
@@ -128,6 +129,7 @@ export function formatSquareCommerceReconcile(
     `Source orders: ${t.sourceOrders}`,
     `Gross sale orders: ${t.grossSaleOrders}`,
     `Return-only orders: ${t.returnOnlyOrders}`,
+    `Return-adjustment non-sales: ${t.returnAdjustmentNonSales}`,
     `Invalid orders: ${t.invalidOrders}`,
     `Canonical sales: ${t.canonicalSales}`,
     "",
@@ -184,6 +186,7 @@ export function emptyReconcileTotals(
     sourceOrders: 0,
     grossSaleOrders: 0,
     returnOnlyOrders: 0,
+    returnAdjustmentNonSales: 0,
     invalidOrders: 0,
     canonicalSales: 0,
     sourceLineItems: 0,

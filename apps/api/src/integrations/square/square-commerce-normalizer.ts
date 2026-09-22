@@ -54,6 +54,7 @@ export type SquareCommerceApplyResult =
     }
   | { outcome: "skipped_stale" }
   | { outcome: "skipped_return_only" }
+  | { outcome: "skipped_return_adjustment_non_sale" }
   | { outcome: "skipped_invalid_order_money" }
   | { outcome: "unresolved_payment" }
   | { outcome: "unresolved_refund" }
@@ -157,6 +158,9 @@ export class SquareCommerceNormalizer {
     const classified = classifySquareOrderMoney(snapshot.payload);
     if (classified.kind === "return_only") {
       return { outcome: "skipped_return_only" };
+    }
+    if (classified.kind === "return_adjustment_non_sale") {
+      return { outcome: "skipped_return_adjustment_non_sale" };
     }
     if (classified.kind === "invalid_order_money") {
       return { outcome: "skipped_invalid_order_money" };

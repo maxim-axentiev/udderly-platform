@@ -91,7 +91,38 @@ test("C. missing gross total plus negative net is return-only, not a $0 sale", (
   );
 });
 
-test("D. missing gross with zero, positive, or unreadable net is invalid order money", () => {
+test("missing gross plus zero net with explicit return object is return-adjustment non-sale", () => {
+  const classified = classifySquareOrderMoney({
+    net_amounts: {
+      total_money: { amount: 0, currency: "CAD" },
+      discount_money: { amount: -1375, currency: "CAD" },
+    },
+    return_amounts: {
+      discount_money: { amount: 1375, currency: "CAD" },
+    },
+    returns: [{ uid: "r1" }],
+  });
+  assert.equal(classified.kind, "return_adjustment_non_sale");
+});
+
+test("missing gross plus zero net with returned component counts is return-adjustment non-sale", () => {
+  assert.equal(
+    classifySquareOrderMoney({
+      net_amounts: { total_money: { amount: 0, currency: "CAD" } },
+      returns: [
+        {
+          uid: "r1",
+          return_line_item_count: 2,
+          return_discount_count: 1,
+          return_tax_count: 1,
+        },
+      ],
+    }).kind,
+    "return_adjustment_non_sale",
+  );
+});
+
+test("D. missing gross with zero, positive, or unreadable net is invalid without return evidence", () => {
   assert.equal(
     classifySquareOrderMoney({
       net_amounts: { total_money: { amount: 0, currency: "CAD" } },
@@ -113,16 +144,7 @@ test("D. missing gross with zero, positive, or unreadable net is invalid order m
   );
   assert.equal(
     classifySquareOrderMoney({
-      net_amounts: {
-        total_money: { amount: 0, currency: "CAD" },
-        tax_money: { amount: 0, currency: "CAD" },
-        discount_money: { amount: -1375, currency: "CAD" },
-        tip_money: { amount: 0, currency: "CAD" },
-        service_charge_money: { amount: 0, currency: "CAD" },
-      },
-      return_amounts: {
-        discount_money: { amount: 1375, currency: "CAD" },
-      },
+      net_amounts: { total_money: { amount: 0, currency: "CAD" } },
       returns: [{ uid: "r1" }],
     }).kind,
     "invalid_order_money",

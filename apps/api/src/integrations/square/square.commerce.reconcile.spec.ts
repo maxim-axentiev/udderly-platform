@@ -43,6 +43,20 @@ test("clean reconciliation including return-only is PASS", () => {
   assert.equal(report.includes("@"), false);
 });
 
+test("return-adjustment non-sale does not cause FAIL", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourceOrders: 3,
+      returnAdjustmentNonSales: 1,
+    }),
+  );
+  assert.equal(verdict.passed, true);
+  assert.match(
+    formatSquareCommerceReconcile(verdict),
+    /Return-adjustment non-sales: 1/,
+  );
+});
+
 test("sale count mismatch is FAIL", () => {
   const verdict = evaluateSquareCommerceReconciliation(
     totals({ canonicalSales: 0 }),
