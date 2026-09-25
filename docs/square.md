@@ -195,6 +195,35 @@ Also `--from YYYY-MM-DD --to YYYY-MM-DD` (inclusive). `:dev` variants use `tsx`.
 
 Payments and refunds are still selected by their own ListPayments/ListRefunds `begin_time`/`end_time` (`created_at`). Normalize uses the same split: orders by snapshot `closed_at`, payments/refunds by `created_at`.
 
+### Payment order dependency recovery (manual)
+
+```
+npm run recover:square-payment-orders -- --from 2026-05-01 --to 2026-05-31
+npm run recover:square-payment-orders -- --date 2026-05-15 --dry-run
+```
+
+Production uses compiled dist JS. Local iteration may use `recover:square-payment-orders:dev`. This is not scheduled.
+
+A payment can reference `payment.order_id` for an order whose `closed_at` is outside the requested payment window (for example a May payment on an April order). Monthly SearchOrders by `closed_at` will not have stored that snapshot. This command finds latest farm-window **payment** snapshots that:
+
+- have `order_id`
+- do not already resolve `square / payment / <id>` to a canonical payment
+- have no `square / order / <order_id>` snapshot
+
+It then `POST`s `/v2/orders/batch-retrieve` with those exact order ids (up to 100 per request). Output is aggregate-only (no payment ids or order ids). Missing returned ids are counted, not invented. Closed-at is reported as before / inside / after the requested payment window, or missing.
+
+`--dry-run` reads the database only: no Square API calls and no writes.
+
+Existing order sanitization and `source_snapshot` hash dedupe apply. Recovery does **not** run commerce normalize, reconcile, or catalog recovery. After recovery, run `normalize:square-commerce` then `reconcile:square-commerce` for the payment window.
+
+Normalize, when attaching a payment, will apply that exact latest order snapshot as a **dependency** if a canonical sale is still missing — even when `order.closed_at` is outside the payment window. The sale keeps `occurred_at = closed_at`. Non-sale classifications (`return_only`, `return_adjustment_non_sale`, `invalid_order_money`) still create no sale; the payment stays unresolved. Unresolved catalog ids on dependency lines keep the line with null product refs.
+
+Synthetic tests:
+
+```
+npm run test:square-payment-order-recovery
+```
+
 ### Snapshots
 
 `provider = square`. `entity_type` is `order`, `payment`, or `refund`. `external_id` is the Square id. Identical sanitized JSON reuses `(provider, entity_type, external_id, payload_hash)`.
@@ -285,7 +314,7 @@ No PERSON. `customer_id` becomes unresolved `source_identity`. No Instant Profil
 
 One transaction per order (sale + current lines + identities). One transaction per payment. One transaction per refund. Newest snapshot (`observed_at`, then `updated_at`, then `version`) wins; older apply is `skipped_stale`. Unchanged sanitized payloads do not insert extra snapshots.
 
-Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Custom/non-catalog lines` separately from `Unresolved catalog lines`. It also reports `Return-only orders skipped`, `Return-adjustment non-sales skipped`, and `Invalid order money skipped` separately. Ordinary normalize does not delete previously created sales.
+Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Custom/non-catalog lines` separately from `Unresolved catalog lines`. It also reports `Return-only orders skipped`, `Return-adjustment non-sales skipped`, `Invalid order money skipped`, and `Dependency orders applied` separately. Ordinary normalize does not delete previously created sales. Already-canonical dependency sales are reused and are not counted as newly applied.
 
 ### Reconciliation (read-only)
 

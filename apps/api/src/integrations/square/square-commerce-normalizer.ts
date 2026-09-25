@@ -10,13 +10,14 @@ import {
 } from "../../database/schema/commerce";
 import { sourceIdentities } from "../../database/schema/source-identity";
 import { sourceSnapshots } from "../../database/schema/source-snapshots";
+import { orderLineExternalId } from "./square.commerce.line";
 import {
   classifySquareOrderMoney,
   moneyAmount,
   moneyCurrency,
   netProcessingFeeCost,
 } from "./square.commerce.money";
-import { orderLineExternalId } from "./square.commerce.line";
+import { pickLatestSnapshotByExternalId } from "./square.commerce.snapshots";
 import {
   squareOrderStatus,
   squarePaymentMethod,
@@ -52,6 +53,7 @@ export type SquareCommerceApplyResult =
       customNonCatalogLines?: number;
       lineItems?: number;
       invalidProcessingFee?: boolean;
+      dependencyOrderApplied?: boolean;
     }
   | { outcome: "skipped_stale" }
   | { outcome: "skipped_return_only" }
@@ -404,12 +406,26 @@ export class SquareCommerceNormalizer {
     if (!orderId) {
       return { outcome: "unresolved_payment" };
     }
-    const saleId = await this.findResolved(
+    let saleId = await this.findResolved(
       db,
       SQUARE_ORDER_ENTITY,
       orderId,
       INTERNAL_SALE,
     );
+    let dependency: {
+      appliedSale: boolean;
+      unresolvedCatalogLines?: number;
+      customNonCatalogLines?: number;
+    } = { appliedSale: false };
+    if (!saleId) {
+      dependency = await this.applyExactOrderDependency(db, orderId);
+      saleId = await this.findResolved(
+        db,
+        SQUARE_ORDER_ENTITY,
+        orderId,
+        INTERNAL_SALE,
+      );
+    }
     if (!saleId) {
       return { outcome: "unresolved_payment" };
     }
@@ -476,7 +492,59 @@ export class SquareCommerceNormalizer {
       outcome: "applied",
       kind: "payment",
       invalidProcessingFee,
+      dependencyOrderApplied: dependency.appliedSale,
+      unresolvedCatalogLines: dependency.unresolvedCatalogLines,
+      customNonCatalogLines: dependency.customNonCatalogLines,
     };
+  }
+
+  private async applyExactOrderDependency(
+    db: SquareCommerceDb,
+    orderId: string,
+  ): Promise<{
+    appliedSale: boolean;
+    unresolvedCatalogLines?: number;
+    customNonCatalogLines?: number;
+  }> {
+    const existingSale = await this.findResolved(
+      db,
+      SQUARE_ORDER_ENTITY,
+      orderId,
+      INTERNAL_SALE,
+    );
+    if (existingSale) {
+      return { appliedSale: false };
+    }
+
+    const rows = await db
+      .select({
+        id: sourceSnapshots.id,
+        externalId: sourceSnapshots.externalId,
+        payload: sourceSnapshots.payload,
+        observedAt: sourceSnapshots.observedAt,
+      })
+      .from(sourceSnapshots)
+      .where(
+        and(
+          eq(sourceSnapshots.provider, SQUARE_PROVIDER),
+          eq(sourceSnapshots.entityType, SQUARE_ORDER_ENTITY),
+          eq(sourceSnapshots.externalId, orderId),
+        ),
+      );
+    const latest = pickLatestSnapshotByExternalId(rows);
+    if (!latest) {
+      return { appliedSale: false };
+    }
+
+    const result = await this.applySnapshot(db, latest.id);
+    if (result.outcome === "applied" && result.kind === "sale") {
+      return {
+        appliedSale: true,
+        unresolvedCatalogLines: result.unresolvedCatalogLines,
+        customNonCatalogLines: result.customNonCatalogLines,
+      };
+    }
+    return { appliedSale: false };
   }
 
   private async applyRefund(

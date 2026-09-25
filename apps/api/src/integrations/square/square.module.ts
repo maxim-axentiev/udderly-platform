@@ -11,6 +11,7 @@ import { SquareCommerceNormalizeService } from "./square-commerce-normalize.serv
 import { SquareCommerceReconcileService } from "./square-commerce-reconcile.service";
 import { SquareCommerceInspectService } from "./square-commerce-inspect.service";
 import { SquareCatalogRecoveryService } from "./square-catalog-recovery.service";
+import { SquarePaymentOrderRecoveryService } from "./square-payment-order-recovery.service";
 
 @Module({
   imports: [DatabaseModule],
@@ -26,6 +27,7 @@ import { SquareCatalogRecoveryService } from "./square-catalog-recovery.service"
     SquareCommerceReconcileService,
     SquareCommerceInspectService,
     SquareCatalogRecoveryService,
+    SquarePaymentOrderRecoveryService,
   ],
   exports: [
     SquareService,
@@ -36,6 +38,7 @@ import { SquareCatalogRecoveryService } from "./square-catalog-recovery.service"
     SquareCommerceReconcileService,
     SquareCommerceInspectService,
     SquareCatalogRecoveryService,
+    SquarePaymentOrderRecoveryService,
   ],
 })
 export class SquareModule {}

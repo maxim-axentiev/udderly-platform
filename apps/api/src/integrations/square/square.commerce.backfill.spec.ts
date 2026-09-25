@@ -45,6 +45,7 @@ function normalizeSummary(): SquareCommerceNormalizeSummary {
     returnOnlyOrdersSkipped: 0,
     returnAdjustmentNonSalesSkipped: 0,
     invalidOrderMoneySkipped: 0,
+    dependencyOrdersApplied: 0,
   };
 }
 

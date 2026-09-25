@@ -32,6 +32,7 @@ export type SquareCommerceNormalizeSummary = {
   returnOnlyOrdersSkipped: number;
   returnAdjustmentNonSalesSkipped: number;
   invalidOrderMoneySkipped: number;
+  dependencyOrdersApplied: number;
 };
 
 @Injectable()
@@ -70,6 +71,7 @@ export class SquareCommerceNormalizeService {
       returnOnlyOrdersSkipped: 0,
       returnAdjustmentNonSalesSkipped: 0,
       invalidOrderMoneySkipped: 0,
+      dependencyOrdersApplied: 0,
     };
 
     for (const snapshot of orders) {
@@ -101,6 +103,11 @@ export class SquareCommerceNormalizeService {
         if (result.invalidProcessingFee) {
           summary.invalidProcessingFees += 1;
         }
+        if (result.dependencyOrderApplied) {
+          summary.dependencyOrdersApplied += 1;
+        }
+        summary.unresolvedCatalogLines += result.unresolvedCatalogLines ?? 0;
+        summary.customNonCatalogLines += result.customNonCatalogLines ?? 0;
       } else if (result.outcome === "unresolved_payment") {
         summary.unresolvedPayments += 1;
       } else if (result.outcome === "skipped_stale") {

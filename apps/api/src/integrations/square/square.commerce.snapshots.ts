@@ -29,19 +29,23 @@ export function pickLatestSnapshots(
       latest.set(row.externalId, row);
       continue;
     }
-    if (row.observedAt.getTime() > existing.observedAt.getTime()) {
+    if (snapshotIsNewer(row, existing)) {
       latest.set(row.externalId, row);
-      continue;
-    }
-    if (row.observedAt.getTime() === existing.observedAt.getTime()) {
-      const rowUpdated = timestampMs(row.payload.updated_at);
-      const existingUpdated = timestampMs(existing.payload.updated_at);
-      if (rowUpdated > existingUpdated) {
-        latest.set(row.externalId, row);
-      }
     }
   }
   return [...latest.values()];
+}
+
+export function pickLatestSnapshotByExternalId(
+  rows: SquareSnapshotRow[],
+): SquareSnapshotRow | undefined {
+  let latest: SquareSnapshotRow | undefined;
+  for (const row of rows) {
+    if (!latest || snapshotIsNewer(row, latest)) {
+      latest = row;
+    }
+  }
+  return latest;
 }
 
 export function reconcileRangeLabel(window: SquareFarmWindow): string {
@@ -57,4 +61,23 @@ function timestampMs(value: unknown): number {
   }
   const time = Date.parse(value);
   return Number.isNaN(time) ? 0 : time;
+}
+
+function snapshotVersion(payload: Record<string, unknown>): number {
+  return typeof payload.version === "number" ? payload.version : 0;
+}
+
+function snapshotIsNewer(
+  candidate: SquareSnapshotRow,
+  incumbent: SquareSnapshotRow,
+): boolean {
+  if (candidate.observedAt.getTime() !== incumbent.observedAt.getTime()) {
+    return candidate.observedAt.getTime() > incumbent.observedAt.getTime();
+  }
+  const candidateUpdated = timestampMs(candidate.payload.updated_at);
+  const incumbentUpdated = timestampMs(incumbent.payload.updated_at);
+  if (candidateUpdated !== incumbentUpdated) {
+    return candidateUpdated > incumbentUpdated;
+  }
+  return snapshotVersion(candidate.payload) > snapshotVersion(incumbent.payload);
 }

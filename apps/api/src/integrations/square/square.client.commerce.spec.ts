@@ -120,6 +120,61 @@ test("refunds list follows Square cursor until the last page", async () => {
   }
 });
 
+test("D. BatchRetrieveOrders posts exact order ids only", async () => {
+  const originalFetch = globalThis.fetch;
+  let pathname = "";
+  let body: Record<string, unknown> | undefined;
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    pathname = url.pathname;
+    body = JSON.parse(String(init?.body ?? "{}")) as Record<string, unknown>;
+    return jsonResponse({
+      orders: [{ id: "ORDER-1" }],
+    });
+  }) as typeof fetch;
+
+  try {
+    const objects = await client().batchRetrieveOrders(["ORDER-1", "ORDER-1", ""]);
+    assert.equal(pathname, "/v2/orders/batch-retrieve");
+    assert.deepEqual(body, { order_ids: ["ORDER-1"] });
+    assert.equal(body?.location_id, undefined);
+    assert.equal(body?.query, undefined);
+    assert.deepEqual(
+      objects.map((object) => object.id),
+      ["ORDER-1"],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("E. BatchRetrieveOrders batches more than 100 ids safely", async () => {
+  const originalFetch = globalThis.fetch;
+  const bodies: string[][] = [];
+
+  globalThis.fetch = (async (_input: RequestInfo | URL, init?: RequestInit) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as {
+      order_ids?: string[];
+    };
+    bodies.push(body.order_ids ?? []);
+    return jsonResponse({
+      orders: (body.order_ids ?? []).map((id) => ({ id })),
+    });
+  }) as typeof fetch;
+
+  try {
+    const ids = Array.from({ length: 101 }, (_, index) => `ORDER-${index}`);
+    const objects = await client().batchRetrieveOrders(ids);
+    assert.equal(bodies.length, 2);
+    assert.equal(bodies[0]?.length, 100);
+    assert.deepEqual(bodies[1], ["ORDER-100"]);
+    assert.equal(objects.length, 101);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 function client(): SquareClient {
   return new SquareClient({
     accessToken: "synthetic-token",

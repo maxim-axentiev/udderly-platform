@@ -5,6 +5,7 @@ import {
   SQUARE_MAX_PAGES,
   SQUARE_MAX_RETRIES,
   SQUARE_ORDERS_PAGE_LIMIT,
+  SQUARE_ORDERS_BATCH_RETRIEVE_LIMIT,
   SQUARE_PAGE_DELAY_MS,
   SQUARE_PAYMENTS_PAGE_LIMIT,
   SQUARE_REFUNDS_PAGE_LIMIT,
@@ -84,6 +85,19 @@ export class SquareClient {
       location_id: this.locationId,
       limit: String(SQUARE_REFUNDS_PAGE_LIMIT),
     });
+  }
+
+  async batchRetrieveOrders(
+    orderIds: string[],
+  ): Promise<Record<string, unknown>[]> {
+    const collected: Record<string, unknown>[] = [];
+    for (const chunk of chunkIds(orderIds, SQUARE_ORDERS_BATCH_RETRIEVE_LIMIT)) {
+      const payload = await this.request("POST", "/v2/orders/batch-retrieve", {
+        body: { order_ids: chunk },
+      });
+      collected.push(...objectsFrom(payload, "orders"));
+    }
+    return collected;
   }
 
   async searchCustomers(): Promise<{
@@ -397,4 +411,13 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function chunkIds(ids: string[], limit: number): string[][] {
+  const unique = [...new Set(ids.filter((id) => id.length > 0))];
+  const chunks: string[][] = [];
+  for (let index = 0; index < unique.length; index += limit) {
+    chunks.push(unique.slice(index, index + limit));
+  }
+  return chunks;
 }
