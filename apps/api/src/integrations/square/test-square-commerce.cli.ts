@@ -58,6 +58,7 @@ const REF_A = "SYN-SQ-COM-REF-A";
 const ORDER_RECON = "SYN-SQ-COM-RECON-ORDER";
 const ORDER_RECON_RETURN = "SYN-SQ-COM-RECON-RETURN";
 const ORDER_RECON_ADJUSTMENT = "SYN-SQ-COM-RECON-ADJUSTMENT";
+const ORDER_RECON_RETURN_ROLLUP = "SYN-SQ-COM-RECON-ROLLUP";
 const ORDER_RECON_UNRESOLVED = "SYN-SQ-COM-RECON-UNRESOLVED";
 const PAY_RECON = "SYN-SQ-COM-RECON-PAY";
 const REF_RECON = "SYN-SQ-COM-RECON-REF";
@@ -94,6 +95,7 @@ const ALL_EXTERNAL_IDS = [
   ORDER_RECON,
   ORDER_RECON_RETURN,
   ORDER_RECON_ADJUSTMENT,
+  ORDER_RECON_RETURN_ROLLUP,
   ORDER_RECON_UNRESOLVED,
   PAY_RECON,
   REF_RECON,
@@ -681,6 +683,7 @@ async function main(): Promise<void> {
         }),
         returnOnlyOrder(ORDER_RECON_RETURN, -1525, -175),
         invalidReturnEvidenceOrder(ORDER_RECON_ADJUSTMENT, 1375),
+        positiveReturnRollupOrder(ORDER_RECON_RETURN_ROLLUP, 11000),
       ],
       payments: [
         payment(PAY_RECON, ORDER_RECON, {
@@ -696,8 +699,8 @@ async function main(): Promise<void> {
     if (reconNorm.sales !== 1) {
       throw new Error("recon window must create exactly one sale");
     }
-    if (reconNorm.returnOnlyOrdersSkipped !== 1) {
-      throw new Error("expected one return-only skip in recon window");
+    if (reconNorm.returnOnlyOrdersSkipped !== 2) {
+      throw new Error("expected two return-only skips in recon window");
     }
     if (reconNorm.returnAdjustmentNonSalesSkipped !== 1) {
       throw new Error("expected one return-adjustment non-sale skip");
@@ -714,11 +717,14 @@ async function main(): Promise<void> {
     if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_RECON_ADJUSTMENT)) {
       throw new Error("return-adjustment non-sale must not create a canonical sale");
     }
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_RECON_RETURN_ROLLUP)) {
+      throw new Error("positive return rollup must not create a canonical sale");
+    }
     const reconAgain = await normalizer.normalizeWindow({ date: FARM_DATE });
     if (
       reconAgain.sales !== 1 ||
       reconAgain.returnAdjustmentNonSalesSkipped !== 1 ||
-      reconAgain.returnOnlyOrdersSkipped !== 1
+      reconAgain.returnOnlyOrdersSkipped !== 2
     ) {
       throw new Error("return-adjustment normalize must remain idempotent");
     }
@@ -728,14 +734,17 @@ async function main(): Promise<void> {
         `expected clean reconciliation PASS, got ${clean.differences.join("; ")}`,
       );
     }
-    if (clean.totals.returnOnlyOrders !== 1 || clean.totals.invalidOrders !== 0) {
+    if (clean.totals.returnOnlyOrders !== 2 || clean.totals.invalidOrders !== 0) {
       throw new Error("return-only order must not fail reconciliation");
     }
     if (clean.totals.returnAdjustmentNonSales !== 1) {
       throw new Error("return-adjustment non-sale must not fail reconciliation");
     }
-    if (clean.totals.sourceOrders !== 3 || clean.totals.grossSaleOrders !== 1) {
+    if (clean.totals.sourceOrders !== 4 || clean.totals.grossSaleOrders !== 1) {
       throw new Error("recon window order classification counts are wrong");
+    }
+    if (clean.totals.canonicalSales !== 1 || clean.totals.canonicalSaleTotal !== 1000) {
+      throw new Error("positive return rollup must not increase canonical sales");
     }
     if (clean.totals.unresolvedVariations !== 0) {
       throw new Error("mapped variation must not count as unresolved");
@@ -1028,6 +1037,25 @@ function invalidReturnEvidenceOrder(
         },
       },
     ],
+  };
+}
+
+function positiveReturnRollupOrder(
+  id: string,
+  returnedTotal: number,
+): Record<string, unknown> {
+  return {
+    id,
+    location_id: "L1",
+    state: "COMPLETED",
+    created_at: CREATED,
+    updated_at: CREATED,
+    closed_at: CREATED,
+    version: 1,
+    return_amounts: {
+      total_money: money(returnedTotal),
+    },
+    returns: [{ uid: "RET-ROLLUP" }],
   };
 }
 

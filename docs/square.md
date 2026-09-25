@@ -256,7 +256,7 @@ A Square provider order can represent:
 Only canonical sales create `sale` rows.
 
 - Original/gross order (usable top-level `total_money`) → `sale`. Zero line items is still a sale if gross money is present. Do not invent a fake line.
-- Return-only order (no usable top-level `total_money`, `net_amounts.total_money` < 0) → **not** a sale. Keep the `source_snapshot`. Do not create a $0 or negative sale. Do not abs the net amount.
+- Return-only order: no usable top-level `total_money`, and either (a) `net_amounts.total_money` < 0, or (b) net total missing, empty current lines, explicit `returns[]`, and valid positive `return_amounts.total_money` on a terminal historical order. Square stores returned rollup totals as a positive amount. Keep the `source_snapshot`. Do not create a $0 or negative sale. Do not abs the net amount. Do not treat return_amounts as sale revenue.
 - Return-adjustment non-sale (no usable top-level `total_money`, valid net total = 0, empty current lines, at least one `returns[]` object, and explicit `return_amounts` and/or returned component counts) → **not** a sale. Keep the snapshot. Do not treat arbitrary zero-net orders this way.
 - Other missing/unusable gross money → skip as invalid/unrepresentable order money and count it.
 
@@ -282,7 +282,7 @@ Canonical Square **sale** fields are original/gross order economics from **top-l
 
 `net_amounts` is post-return/net provider evidence. It is stored on the snapshot but **must not** set canonical sale fields. Using `net_amounts` as the sale total plus recording refunds would count returns twice.
 
-Square return-only orders (no usable top-level `total_money`, negative `net_amounts.total_money`) stay as snapshot evidence only. Return-adjustment non-sales (zero net total with explicit sanitized return evidence) also stay as snapshot evidence only. Canonical refunds come from the Refunds API, not from abs(net) or a $0 sale.
+Square return-only orders stay as snapshot evidence only: either negative `net_amounts.total_money`, or a historical return rollup with no gross/net, empty current lines, explicit returns, and positive `return_amounts.total_money`. Return-adjustment non-sales (zero net total with explicit sanitized return evidence) also stay as snapshot evidence only. Canonical refunds come from the Refunds API, not from abs(net), return_amounts, or a $0 sale.
 
 Reporting:
 

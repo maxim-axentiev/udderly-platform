@@ -91,6 +91,102 @@ test("C. missing gross total plus negative net is return-only, not a $0 sale", (
   );
 });
 
+test("A. missing gross and net with positive return_amounts is return-only", () => {
+  const classified = classifySquareOrderMoney(positiveReturnRollup());
+  assert.equal(classified.kind, "return_only");
+  if (classified.kind === "return_only") {
+    assert.equal(classified.netTotal, 0);
+  }
+});
+
+test("C. positive return_amounts is not sale revenue", () => {
+  assert.equal(squareOrderSaleMoney(positiveReturnRollup()), undefined);
+});
+
+test("D. existing missing gross plus negative net remains return-only", () => {
+  assert.equal(
+    classifySquareOrderMoney({
+      state: "COMPLETED",
+      closed_at: "2025-10-15T16:00:00.000Z",
+      net_amounts: { total_money: { amount: -1525, currency: "CAD" } },
+    }).kind,
+    "return_only",
+  );
+});
+
+test("E. missing gross plus net zero with return evidence stays return-adjustment", () => {
+  const classified = classifySquareOrderMoney({
+    state: "COMPLETED",
+    closed_at: "2025-10-15T16:00:00.000Z",
+    net_amounts: {
+      total_money: { amount: 0, currency: "CAD" },
+      discount_money: { amount: -1375, currency: "CAD" },
+    },
+    return_amounts: {
+      discount_money: { amount: 1375, currency: "CAD" },
+    },
+    returns: [{ uid: "r1" }],
+  });
+  assert.equal(classified.kind, "return_adjustment_non_sale");
+});
+
+test("F. missing gross plus positive net does not use the return-amount rule", () => {
+  assert.equal(
+    classifySquareOrderMoney({
+      ...positiveReturnRollup(),
+      net_amounts: { total_money: { amount: 11000, currency: "CAD" } },
+    }).kind,
+    "invalid_order_money",
+  );
+});
+
+test("G. current sale lines with positive return_amounts remain invalid", () => {
+  assert.equal(
+    classifySquareOrderMoney({
+      ...positiveReturnRollup(),
+      line_items: [{ uid: "L1", name: "Milk" }],
+    }).kind,
+    "invalid_order_money",
+  );
+});
+
+test("H. positive return_amounts without returns[] remains invalid", () => {
+  const payload = positiveReturnRollup();
+  delete payload.returns;
+  assert.equal(classifySquareOrderMoney(payload).kind, "invalid_order_money");
+});
+
+test("I. missing return currency remains invalid", () => {
+  assert.equal(
+    classifySquareOrderMoney({
+      ...positiveReturnRollup(),
+      return_amounts: { total_money: { amount: 11000 } },
+    }).kind,
+    "invalid_order_money",
+  );
+});
+
+test("J. zero return_amounts total does not use the positive-return rule", () => {
+  assert.equal(
+    classifySquareOrderMoney({
+      ...positiveReturnRollup(),
+      return_amounts: { total_money: { amount: 0, currency: "CAD" } },
+    }).kind,
+    "invalid_order_money",
+  );
+});
+
+function positiveReturnRollup(): Record<string, unknown> {
+  return {
+    state: "COMPLETED",
+    closed_at: "2025-10-15T16:00:00.000Z",
+    returns: [{ uid: "r1" }],
+    return_amounts: {
+      total_money: { amount: 11000, currency: "CAD" },
+    },
+  };
+}
+
 test("missing gross plus zero net with explicit return object is return-adjustment non-sale", () => {
   const classified = classifySquareOrderMoney({
     net_amounts: {

@@ -76,6 +76,21 @@ test("return-adjustment non-sale does not cause FAIL", () => {
   );
 });
 
+test("K. October-style positive return rollup is return-only and does not change sales", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourceOrders: 3,
+      returnOnlyOrders: 2,
+    }),
+  );
+  assert.equal(verdict.passed, true);
+  assert.equal(verdict.totals.canonicalSales, 1);
+  assert.equal(verdict.totals.sourceGrossSaleTotal, 1000);
+  assert.equal(verdict.totals.canonicalSaleTotal, 1000);
+  assert.match(formatSquareCommerceReconcile(verdict), /Return-only orders: 2/);
+  assert.match(formatSquareCommerceReconcile(verdict), /Invalid orders: 0/);
+});
+
 test("sale count mismatch is FAIL", () => {
   const verdict = evaluateSquareCommerceReconciliation(
     totals({ canonicalSales: 0 }),

@@ -1,3 +1,5 @@
+import { squareOrderEligibleAsHistoricalSale } from "./square.commerce.order";
+
 export type SquareMoneyParts = {
   amount: number;
   currency?: string;
@@ -23,13 +25,18 @@ export type SquareOrderMoneyClassification =
  * Classify Square order money for canonical sale mapping.
  *
  * gross sale: usable top-level `total_money`.
- * return-only: missing/unusable gross AND valid `net_amounts.total_money` < 0.
+ * return-only: missing/unusable gross AND either
+ *   (a) valid `net_amounts.total_money` < 0, or
+ *   (b) net total missing, empty current lines, explicit return evidence,
+ *       and valid positive `return_amounts.total_money` (historical return
+ *       rollup; Square stores that total as a positive amount).
  * return-adjustment non-sale: missing/unusable gross, valid net total = 0,
  *   empty current line_items, at least one `returns[]` object, and explicit
  *   return evidence (`return_amounts` and/or returned component counts).
  * invalid order money: anything else that cannot safely be a sale.
  *
- * Do not abs net amounts. Do not store a $0/negative sale.
+ * Do not abs net amounts. Do not treat positive return_amounts as sale
+ * revenue. Do not store a $0/negative sale.
  */
 export function classifySquareOrderMoney(
   order: Record<string, unknown>,
@@ -42,6 +49,9 @@ export function classifySquareOrderMoney(
     }
     if (netTotal === 0 && isReturnAdjustmentNonSale(order)) {
       return { kind: "return_adjustment_non_sale", netTotal: 0 };
+    }
+    if (netTotal === undefined && isPositiveReturnAmountsReturnOnly(order)) {
+      return { kind: "return_only", netTotal: 0 };
     }
     return { kind: "invalid_order_money" };
   }
@@ -57,10 +67,7 @@ function isReturnAdjustmentNonSale(order: Record<string, unknown>): boolean {
   if (nestedArray(order.line_items).length > 0) {
     return false;
   }
-  const returns = nestedArray(order.returns).filter(
-    (entry): entry is Record<string, unknown> =>
-      Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
-  );
+  const returns = returnObjects(order);
   if (returns.length === 0) {
     return false;
   }
@@ -76,6 +83,36 @@ function isReturnAdjustmentNonSale(order: Record<string, unknown>): boolean {
       componentCount(entry, "return_service_charge_count", "return_service_charges") >
         0 ||
       componentCount(entry, "return_tip_count", "return_tips") > 0,
+  );
+}
+
+/**
+ * Historical Square return rollup: no gross, no net, empty current lines,
+ * explicit returns[], and a positive valid return_amounts.total_money.
+ * Square documents return_amounts.total_money as a positive returned total.
+ */
+function isPositiveReturnAmountsReturnOnly(
+  order: Record<string, unknown>,
+): boolean {
+  if (!squareOrderEligibleAsHistoricalSale(order)) {
+    return false;
+  }
+  if (nestedArray(order.line_items).length > 0) {
+    return false;
+  }
+  if (returnObjects(order).length === 0) {
+    return false;
+  }
+  const returnedTotal = nestedObject(order.return_amounts)?.total_money;
+  const amount = moneyAmount(returnedTotal);
+  const currency = moneyCurrency(returnedTotal);
+  return amount !== undefined && amount > 0 && currency !== undefined;
+}
+
+function returnObjects(order: Record<string, unknown>): Record<string, unknown>[] {
+  return nestedArray(order.returns).filter(
+    (entry): entry is Record<string, unknown> =>
+      Boolean(entry) && typeof entry === "object" && !Array.isArray(entry),
   );
 }
 
