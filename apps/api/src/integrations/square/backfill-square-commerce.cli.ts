@@ -1,9 +1,12 @@
 import { NestFactory } from "@nestjs/core";
 import { AppModule } from "../../app.module";
 import { loadEnvFiles } from "../../config/load-env";
+import { SquareCatalogNormalizeService } from "./square-catalog-normalize.service";
+import { SquareCatalogRecoveryService } from "./square-catalog-recovery.service";
 import { SquareCommerceImportService } from "./square-commerce-import.service";
 import { SquareCommerceNormalizeService } from "./square-commerce-normalize.service";
 import { SquareCommerceReconcileService } from "./square-commerce-reconcile.service";
+import { SquarePaymentOrderRecoveryService } from "./square-payment-order-recovery.service";
 import {
   parseSquareCommerceBackfillArgs,
   runSquareCommerceBackfill,
@@ -41,11 +44,21 @@ async function main(): Promise<void> {
     const importer = app.get(SquareCommerceImportService);
     const normalizer = app.get(SquareCommerceNormalizeService);
     const reconcilor = app.get(SquareCommerceReconcileService);
+    const catalogRecovery = app.get(SquareCatalogRecoveryService);
+    const catalogNormalizer = app.get(SquareCatalogNormalizeService);
+    const paymentOrderRecovery = app.get(SquarePaymentOrderRecoveryService);
     const result = await runSquareCommerceBackfill(
       {
         importWindow: (window) => importer.importWindow(window),
         normalizeWindow: (window) => normalizer.normalizeWindow(window),
         reconcileWindow: (window) => reconcilor.reconcileWindow(window),
+        discoverCatalogWindow: (window) => catalogRecovery.discoverWindow(window),
+        recoverCatalogWindow: (window) => catalogRecovery.recoverWindow(window),
+        normalizeCatalogLatest: () => catalogNormalizer.normalizeLatest(),
+        discoverPaymentOrderWindow: (window) =>
+          paymentOrderRecovery.discoverWindow(window),
+        recoverPaymentOrderWindow: (window) =>
+          paymentOrderRecovery.recoverWindow(window),
       },
       plan,
       console.log,
@@ -60,12 +73,17 @@ async function main(): Promise<void> {
 
 function unusedDeps(): SquareCommerceBackfillDeps {
   const refuse = async () => {
-    throw new Error("dry-run must not call import, normalize, or reconcile");
+    throw new Error("dry-run must not call import, normalize, reconcile, or recovery");
   };
   return {
     importWindow: refuse,
     normalizeWindow: refuse,
     reconcileWindow: refuse,
+    discoverCatalogWindow: refuse,
+    recoverCatalogWindow: refuse,
+    normalizeCatalogLatest: refuse,
+    discoverPaymentOrderWindow: refuse,
+    recoverPaymentOrderWindow: refuse,
   };
 }
 

@@ -340,13 +340,15 @@ Production uses compiled dist JS (`backfill:square-commerce`). Local iteration m
 
 This is not scheduled and does not invent products or catalog mappings. It reuses existing import, normalize, and reconcile services. Inclusive America/Toronto farm dates are split into calendar-month chunks and processed **newest to oldest**. Mid-month `--from` / `--to` clip the first and last months.
 
-`--dry-run` prints the chunk list and performs no Square API calls and no database writes (it does not start the Nest app).
+Each live chunk is import → normalize → reconcile. On reconcile FAIL, the runner may attempt **at most one** historical catalog recovery and **at most one** payment-order dependency recovery for that chunk, using only the already-proven exact recovery commands (exact `catalog_object_id` + `catalog_version`; exact `payment.order_id`). After each successful recovery it normalizes catalog when catalog snapshots were stored, then reruns commerce normalize and reconcile. Missing Square objects, unexpected catalog types, or missing order ids stop the chunk without guessing. If reconcile still FAILs after those bounded recoveries, the runner stops, prints the failed chunk dates, and exits nonzero. Older chunks are not started.
 
-Each live chunk is import → normalize → reconcile. The existing reconcile verdict is the gate. On import/normalize throw or reconcile FAIL, the runner stops, prints the failed chunk dates, and exits nonzero. Older chunks are not started. Valid failed non-settled payment attempts do not fail reconcile and do not stop the backfill. Genuinely unresolved or ambiguous payments still FAIL and stop. A rerun is safe: snapshots deduplicate by hash, normalize is idempotent, and there is no extra backfill checkpoint store.
+`--dry-run` prints the chunk list and performs no Square API calls and no database writes (it does not start the Nest app and does not run recovery).
+
+Valid failed non-settled payment attempts do not fail reconcile and do not stop the backfill. Genuinely unresolved or ambiguous payments still FAIL and stop. A rerun is safe: snapshots deduplicate by hash, normalize is idempotent, and there is no extra backfill checkpoint store.
 
 The already-proven production window is 2026-08-17 through 2026-09-15. Choose `--to` before that range for the first historical run. Do not assume a fixed earliest Square date; pass `--from` explicitly.
 
-An unresolved catalog-bearing line still FAILs reconcile and stops the backfill. Inspect that historical catalog id separately; do not fuzzy-match or re-import catalog every month.
+An unresolved catalog-bearing line still FAILs reconcile. During backfill it may trigger one automatic exact historical catalog recovery for that month; if Square cannot return every requested object/version, or the variation remains unresolved after retry, the backfill stops. Do not fuzzy-match or invent catalog entities.
 
 ### Return evidence inspect (read-only)
 
