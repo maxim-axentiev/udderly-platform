@@ -46,7 +46,7 @@
     "recover:square-catalog:dev": "tsx src/integrations/square/recover-square-catalog.cli.ts",
     "recover:square-payment-orders": "node dist/integrations/square/recover-square-payment-orders.cli.js",
     "recover:square-payment-orders:dev": "tsx src/integrations/square/recover-square-payment-orders.cli.ts",
-    "test:square-payment-order-recovery": "tsx --test src/integrations/square/square.commerce.payment-order-recovery.spec.ts src/integrations/square/square.client.commerce.spec.ts && tsx src/integrations/square/test-square-payment-order-recovery.cli.ts",
+    "test:square-payment-order-recovery": "tsx --test src/integrations/square/square.commerce.payment-order-recovery.spec.ts src/integrations/square/square.commerce.payment-class.spec.ts src/integrations/square/square.client.commerce.spec.ts && tsx src/integrations/square/test-square-payment-order-recovery.cli.ts",
     "test:square-catalog-recovery": "tsx --test src/integrations/square/square.catalog.recovery.spec.ts src/integrations/square/square.client.catalog.spec.ts && tsx src/integrations/square/test-square-catalog-recovery.cli.ts",
     "test:square-catalog": "tsx --test src/integrations/square/square.catalog.sanitize.spec.ts src/integrations/square/square.client.catalog.spec.ts src/integrations/square/square.catalog.recovery.spec.ts && tsx src/integrations/square/test-square-catalog.cli.ts",
     "import:square-commerce": "node dist/integrations/square/import-square-commerce.cli.js",
@@ -60,7 +60,7 @@
     "backfill:square-commerce": "node dist/integrations/square/backfill-square-commerce.cli.js",
     "backfill:square-commerce:dev": "tsx src/integrations/square/backfill-square-commerce.cli.ts",
     "test:square-backfill": "tsx --test src/integrations/square/square.commerce.backfill.spec.ts",
-    "test:square-commerce": "tsx --test src/integrations/square/square.commerce.sanitize.spec.ts src/integrations/square/square.commerce.money.spec.ts src/integrations/square/square.commerce.line.spec.ts src/integrations/square/square.client.commerce.spec.ts src/integrations/square/square.commerce.reconcile.spec.ts src/integrations/square/square.commerce.inspect.spec.ts && tsx src/integrations/square/test-square-commerce.cli.ts"
+    "test:square-commerce": "tsx --test src/integrations/square/square.commerce.sanitize.spec.ts src/integrations/square/square.commerce.money.spec.ts src/integrations/square/square.commerce.line.spec.ts src/integrations/square/square.client.commerce.spec.ts src/integrations/square/square.commerce.reconcile.spec.ts src/integrations/square/square.commerce.inspect.spec.ts src/integrations/square/square.commerce.payment-class.spec.ts && tsx src/integrations/square/test-square-commerce.cli.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

@@ -9,17 +9,18 @@ import {
 } from "../../database/schema/commerce";
 import { sourceIdentities } from "../../database/schema/source-identity";
 import { sourceSnapshots } from "../../database/schema/source-snapshots";
+import { classifySquareOrderMoney, moneyAmount, netProcessingFeeCost } from "./square.commerce.money";
 import {
-  classifySquareOrderMoney,
-  moneyAmount,
-  netProcessingFeeCost,
-} from "./square.commerce.money";
+  classifySquareSourcePayment,
+  failedAttemptRequestedAmount,
+} from "./square.commerce.payment-class";
 import {
   emptyReconcileTotals,
   evaluateSquareCommerceReconciliation,
   type SquareCommerceReconcileVerdict,
 } from "./square.commerce.reconcile";
 import {
+  indexLatestSnapshotsByExternalId,
   pickLatestSnapshots,
   reconcileRangeLabel,
   type SquareSnapshotRow,
@@ -121,7 +122,31 @@ export class SquareCommerceReconcileService {
     totals.activeCanonicalLines = lineCounts.active;
     totals.inactiveCanonicalLines = lineCounts.inactive;
 
+    const latestOrdersById = indexLatestSnapshotsByExternalId(orderRows);
+    const resolvedSales = await this.resolvedExternalIds(
+      SQUARE_ORDER_ENTITY,
+      INTERNAL_SALE,
+    );
+
     for (const snapshot of paymentSnapshots) {
+      const orderId = stringValue(snapshot.payload.order_id);
+      const orderPayload = orderId
+        ? latestOrdersById.get(orderId)?.payload
+        : undefined;
+      const saleResolved = Boolean(orderId && resolvedSales.has(orderId));
+      if (
+        classifySquareSourcePayment(snapshot.payload, {
+          saleResolved,
+          orderPayload,
+        }) === "failed_non_settled_attempt"
+      ) {
+        totals.failedNonSettledAttempts += 1;
+        totals.failedAttemptRequestedAmount += failedAttemptRequestedAmount(
+          snapshot.payload,
+        );
+        continue;
+      }
+      totals.canonicalizableSourcePayments += 1;
       totals.sourcePaymentAmount += nonNegative(
         moneyAmount(snapshot.payload.amount_money),
       );

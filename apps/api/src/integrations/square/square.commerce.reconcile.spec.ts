@@ -20,9 +20,12 @@ function totals(
     canonicalLineItems: 1,
     activeCanonicalLines: 1,
     sourcePayments: 1,
+    canonicalizableSourcePayments: 1,
+    failedNonSettledAttempts: 0,
     canonicalPayments: 1,
     sourcePaymentAmount: 1000,
     canonicalPaymentAmount: 1000,
+    failedAttemptRequestedAmount: 0,
     sourceGrossSaleTotal: 1000,
     canonicalSaleTotal: 1000,
     sourceRefunds: 1,
@@ -112,6 +115,40 @@ test("inactive lines matching newer source state do not fail", () => {
 test("payment mismatch is FAIL", () => {
   const verdict = evaluateSquareCommerceReconciliation(
     totals({ canonicalPayments: 0 }),
+  );
+  assert.equal(verdict.passed, false);
+  assert.match(verdict.differences.join("\n"), /Payment counts/);
+});
+
+test("G. valid skipped failed non-settled attempt is PASS", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourcePayments: 2,
+      canonicalizableSourcePayments: 1,
+      failedNonSettledAttempts: 1,
+      canonicalPayments: 1,
+      sourcePaymentAmount: 1000,
+      canonicalPaymentAmount: 1000,
+      failedAttemptRequestedAmount: 19972,
+    }),
+  );
+  assert.equal(verdict.passed, true);
+  const report = formatSquareCommerceReconcile(verdict);
+  assert.match(report, /Source payment records: 2/);
+  assert.match(report, /Canonicalizable source payments: 1/);
+  assert.match(report, /Failed non-settled attempts: 1/);
+  assert.match(report, /Failed attempt requested amount: 19972/);
+  assert.match(report, /Source canonical payment amount: 1000/);
+});
+
+test("K. unresolved non-failed payment remains FAIL", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourcePayments: 2,
+      canonicalizableSourcePayments: 2,
+      failedNonSettledAttempts: 0,
+      canonicalPayments: 1,
+    }),
   );
   assert.equal(verdict.passed, false);
   assert.match(verdict.differences.join("\n"), /Payment counts/);

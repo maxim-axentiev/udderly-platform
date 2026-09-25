@@ -42,6 +42,9 @@ async function main(): Promise<void> {
     );
     console.log(`Invalid order money skipped: ${result.invalidOrderMoneySkipped}`);
     console.log(`Unresolved payments: ${result.unresolvedPayments}`);
+    console.log(
+      `Failed non-settled payment attempts skipped: ${result.failedNonSettledPaymentAttemptsSkipped}`,
+    );
     console.log(`Unresolved refunds: ${result.unresolvedRefunds}`);
     console.log(`Dependency orders applied: ${result.dependencyOrdersApplied}`);
     console.log(

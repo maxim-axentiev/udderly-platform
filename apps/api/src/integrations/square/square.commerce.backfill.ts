@@ -211,6 +211,9 @@ export async function runSquareCommerceBackfill(
     );
     log(`Invalid order money skipped: ${normalized.invalidOrderMoneySkipped}`);
     log(`Unresolved payments: ${normalized.unresolvedPayments}`);
+    log(
+      `Failed non-settled payment attempts skipped: ${normalized.failedNonSettledPaymentAttemptsSkipped}`,
+    );
     log(`Dependency orders applied: ${normalized.dependencyOrdersApplied}`);
     log(`Unresolved refunds: ${normalized.unresolvedRefunds}`);
     log(

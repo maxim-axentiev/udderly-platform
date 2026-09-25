@@ -48,6 +48,19 @@ export function pickLatestSnapshotByExternalId(
   return latest;
 }
 
+export function indexLatestSnapshotsByExternalId(
+  rows: SquareSnapshotRow[],
+): Map<string, SquareSnapshotRow> {
+  const latest = new Map<string, SquareSnapshotRow>();
+  for (const row of rows) {
+    const existing = latest.get(row.externalId);
+    if (!existing || snapshotIsNewer(row, existing)) {
+      latest.set(row.externalId, row);
+    }
+  }
+  return latest;
+}
+
 export function reconcileRangeLabel(window: SquareFarmWindow): string {
   if ("date" in window) {
     return `${window.date} to ${window.date} (${FARM_TIME_ZONE})`;

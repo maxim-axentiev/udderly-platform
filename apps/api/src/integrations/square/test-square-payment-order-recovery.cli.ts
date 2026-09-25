@@ -30,8 +30,10 @@ import {
 
 const MAY = { from: "2026-05-01", to: "2026-05-31" } as const;
 const APRIL = { from: "2026-04-01", to: "2026-04-30" } as const;
+const MARCH = { date: "2026-03-15" } as const;
 const MAY_CREATED = "2026-05-15T16:00:00.000Z";
 const APRIL_CLOSED = "2026-04-20T16:00:00.000Z";
+const MARCH_CREATED = "2026-03-15T16:00:00.000Z";
 
 const ORDER_GROSS = "SYN-SQ-POR-ORDER-GROSS";
 const ORDER_REUSE = "SYN-SQ-POR-ORDER-REUSE";
@@ -52,6 +54,18 @@ const PAY_RESOLVED = "SYN-SQ-POR-PAY-RESOLVED";
 const VAR_OK = "SYN-SQ-POR-VAR-OK";
 const ITEM_OK = "SYN-SQ-POR-ITEM-OK";
 const VAR_MISSING = "SYN-SQ-POR-VAR-MISSING";
+const ORDER_OPEN = "SYN-SQ-POR-ORDER-OPEN";
+const ORDER_MARCH = "SYN-SQ-POR-ORDER-MARCH";
+const ORDER_OPEN_H = "SYN-SQ-POR-ORDER-OPEN-H";
+const ORDER_OPEN_I = "SYN-SQ-POR-ORDER-OPEN-I";
+const ORDER_OPEN_J = "SYN-SQ-POR-ORDER-OPEN-J";
+const ORDER_OPEN_K = "SYN-SQ-POR-ORDER-OPEN-K";
+const PAY_FAILED_OPEN = "SYN-SQ-POR-PAY-FAIL-OPEN";
+const PAY_MARCH = "SYN-SQ-POR-PAY-MARCH";
+const PAY_FAIL_APPROVED = "SYN-SQ-POR-PAY-FAIL-APPR";
+const PAY_FAIL_FEE = "SYN-SQ-POR-PAY-FAIL-FEE";
+const PAY_FAIL_REFUND = "SYN-SQ-POR-PAY-FAIL-REF";
+const PAY_COMPLETED_OPEN = "SYN-SQ-POR-PAY-COMP-OPEN";
 
 const ALL_EXTERNAL_IDS = [
   ORDER_GROSS,
@@ -73,9 +87,23 @@ const ALL_EXTERNAL_IDS = [
   VAR_OK,
   ITEM_OK,
   VAR_MISSING,
+  ORDER_OPEN,
+  ORDER_MARCH,
+  ORDER_OPEN_H,
+  ORDER_OPEN_I,
+  ORDER_OPEN_J,
+  ORDER_OPEN_K,
+  PAY_FAILED_OPEN,
+  PAY_MARCH,
+  PAY_FAIL_APPROVED,
+  PAY_FAIL_FEE,
+  PAY_FAIL_REFUND,
+  PAY_COMPLETED_OPEN,
   `${ORDER_GROSS}:L1`,
   `${ORDER_REUSE}:L1`,
   `${ORDER_CATALOG}:L1`,
+  `${ORDER_OPEN}:L1`,
+  `${ORDER_MARCH}:L1`,
 ];
 
 async function main(): Promise<void> {
@@ -292,6 +320,135 @@ async function main(): Promise<void> {
     }
     console.log("- O. unresolved catalog ids on dependency lines are kept, not fuzzy matched");
 
+    await importer.persistCommerceObjects({
+      orders: [
+        openOrder(ORDER_OPEN, 19972, MARCH_CREATED),
+        {
+          ...grossOrder(ORDER_MARCH, 1000),
+          created_at: MARCH_CREATED,
+          updated_at: MARCH_CREATED,
+          closed_at: MARCH_CREATED,
+        },
+      ],
+      payments: [
+        payment(PAY_FAILED_OPEN, ORDER_OPEN, 19972, {
+          status: "FAILED",
+          createdAt: MARCH_CREATED,
+          approved: 0,
+          refunded: 0,
+        }),
+        payment(PAY_MARCH, ORDER_MARCH, 1000, { createdAt: MARCH_CREATED }),
+      ],
+    });
+    const march = await normalizer.normalizeWindow(MARCH);
+    if (march.sales !== 1) {
+      throw new Error("March must create only the closed-order sale");
+    }
+    if (march.payments !== 1) {
+      throw new Error("Payments counter must count canonical payments only");
+    }
+    if (march.failedNonSettledPaymentAttemptsSkipped !== 1) {
+      throw new Error("expected one failed non-settled attempt skip");
+    }
+    if (march.unresolvedPayments !== 0) {
+      throw new Error("valid failed attempt must not remain unresolved");
+    }
+    if (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_OPEN)) {
+      throw new Error("OPEN dependency order must not create a sale");
+    }
+    if (await resolvedId(database, SQUARE_PAYMENT_ENTITY, PAY_FAILED_OPEN)) {
+      throw new Error("failed non-settled attempt must not create a canonical payment");
+    }
+    const marchAgain = await normalizer.normalizeWindow(MARCH);
+    if (
+      marchAgain.failedNonSettledPaymentAttemptsSkipped !== 1 ||
+      marchAgain.payments !== 1 ||
+      (await resolvedId(database, SQUARE_ORDER_ENTITY, ORDER_OPEN))
+    ) {
+      throw new Error("failed-attempt normalize must remain idempotent");
+    }
+    const marchRecon = await reconcilor.reconcileWindow(MARCH);
+    if (!marchRecon.passed) {
+      throw new Error(
+        `expected March PASS with skipped failed attempt, got ${marchRecon.differences.join("; ")}`,
+      );
+    }
+    if (marchRecon.totals.sourcePayments !== 2) {
+      throw new Error("source payment records must include the failed attempt");
+    }
+    if (marchRecon.totals.canonicalizableSourcePayments !== 1) {
+      throw new Error("failed attempt must not be canonicalizable");
+    }
+    if (marchRecon.totals.failedNonSettledAttempts !== 1) {
+      throw new Error("failed non-settled attempts must be counted");
+    }
+    if (marchRecon.totals.canonicalPayments !== 1) {
+      throw new Error("canonical payments must exclude the failed attempt");
+    }
+    if (marchRecon.totals.sourcePaymentAmount !== 1000) {
+      throw new Error("failed requested amount must be excluded from canonicalizable source total");
+    }
+    if (marchRecon.totals.failedAttemptRequestedAmount !== 19972) {
+      throw new Error("failed attempt requested amount must be reported separately");
+    }
+    if (marchRecon.totals.canonicalPaymentAmount !== 1000) {
+      throw new Error("canonical payment amount must match canonicalizable source");
+    }
+    console.log("- A-G/M. failed OPEN attempt is skipped, OPEN creates no sale, recon PASS");
+
+    await importer.persistCommerceObjects({
+      orders: [
+        openOrder(ORDER_OPEN_H, 500, MARCH_CREATED),
+        openOrder(ORDER_OPEN_I, 500, MARCH_CREATED),
+        openOrder(ORDER_OPEN_J, 500, MARCH_CREATED),
+        openOrder(ORDER_OPEN_K, 500, MARCH_CREATED),
+      ],
+      payments: [
+        payment(PAY_FAIL_APPROVED, ORDER_OPEN_H, 500, {
+          status: "FAILED",
+          createdAt: MARCH_CREATED,
+          approved: 500,
+        }),
+        payment(PAY_FAIL_FEE, ORDER_OPEN_I, 500, {
+          status: "FAILED",
+          createdAt: MARCH_CREATED,
+          approved: 0,
+          fee: 30,
+        }),
+        payment(PAY_FAIL_REFUND, ORDER_OPEN_J, 500, {
+          status: "FAILED",
+          createdAt: MARCH_CREATED,
+          approved: 0,
+          refunded: 100,
+        }),
+        payment(PAY_COMPLETED_OPEN, ORDER_OPEN_K, 500, {
+          status: "COMPLETED",
+          createdAt: MARCH_CREATED,
+        }),
+      ],
+    });
+    const ambiguous = await normalizer.normalizeWindow(MARCH);
+    if (ambiguous.unresolvedPayments < 4) {
+      throw new Error("ambiguous failed/open payments must remain unresolved");
+    }
+    if (await resolvedId(database, SQUARE_PAYMENT_ENTITY, PAY_FAIL_APPROVED)) {
+      throw new Error("FAILED with approved funds must not be skipped as settled-empty");
+    }
+    if (await resolvedId(database, SQUARE_PAYMENT_ENTITY, PAY_FAIL_FEE)) {
+      throw new Error("FAILED with processing fee must remain unresolved");
+    }
+    if (await resolvedId(database, SQUARE_PAYMENT_ENTITY, PAY_FAIL_REFUND)) {
+      throw new Error("FAILED with refund activity must remain unresolved");
+    }
+    if (await resolvedId(database, SQUARE_PAYMENT_ENTITY, PAY_COMPLETED_OPEN)) {
+      throw new Error("COMPLETED payment on OPEN order must remain unresolved");
+    }
+    const ambiguousRecon = await reconcilor.reconcileWindow(MARCH);
+    if (ambiguousRecon.passed) {
+      throw new Error("ambiguous unresolved payments must FAIL reconciliation");
+    }
+    console.log("- H/I/J/K. approved funds, fees, refunds, and non-FAILED stay FAIL");
+
     console.log("square payment order recovery tests passed");
   } finally {
     await cleanup(database);
@@ -415,20 +572,66 @@ function invalidGrossOrder(id: string, netTotal: number): Record<string, unknown
   };
 }
 
+function openOrder(
+  id: string,
+  total: number,
+  createdAt: string,
+): Record<string, unknown> {
+  return {
+    id,
+    location_id: "L1",
+    state: "OPEN",
+    created_at: createdAt,
+    updated_at: createdAt,
+    version: 1,
+    total_money: money(total),
+    total_tax_money: money(0),
+    total_discount_money: money(0),
+    total_tip_money: money(0),
+    total_service_charge_money: money(0),
+    line_items: [
+      {
+        uid: "L1",
+        name: "Open cart",
+        quantity: "1",
+        catalog_object_id: VAR_OK,
+        total_money: money(total),
+      },
+    ],
+  };
+}
+
 function payment(
   id: string,
   orderId: string,
   amount: number,
+  options: {
+    status?: string;
+    createdAt?: string;
+    approved?: number;
+    refunded?: number;
+    fee?: number;
+  } = {},
 ): Record<string, unknown> {
+  const createdAt = options.createdAt ?? MAY_CREATED;
   return {
     id,
     order_id: orderId,
     location_id: "L1",
-    status: "COMPLETED",
-    created_at: MAY_CREATED,
-    updated_at: MAY_CREATED,
+    status: options.status ?? "COMPLETED",
+    created_at: createdAt,
+    updated_at: createdAt,
     source_type: "CARD",
     amount_money: money(amount),
+    ...(options.approved === undefined
+      ? {}
+      : { approved_money: money(options.approved) }),
+    ...(options.refunded === undefined
+      ? {}
+      : { refunded_money: money(options.refunded) }),
+    ...(options.fee === undefined
+      ? {}
+      : { processing_fee: [{ type: "INITIAL", amount_money: money(options.fee) }] }),
   };
 }
 

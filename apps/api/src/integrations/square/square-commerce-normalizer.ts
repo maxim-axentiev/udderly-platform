@@ -10,6 +10,8 @@ import {
 } from "../../database/schema/commerce";
 import { sourceIdentities } from "../../database/schema/source-identity";
 import { sourceSnapshots } from "../../database/schema/source-snapshots";
+import { classifySquareSourcePayment } from "./square.commerce.payment-class";
+import { squareOrderEligibleAsHistoricalSale } from "./square.commerce.order";
 import { orderLineExternalId } from "./square.commerce.line";
 import {
   classifySquareOrderMoney,
@@ -59,6 +61,8 @@ export type SquareCommerceApplyResult =
   | { outcome: "skipped_return_only" }
   | { outcome: "skipped_return_adjustment_non_sale" }
   | { outcome: "skipped_invalid_order_money" }
+  | { outcome: "skipped_nonterminal_order" }
+  | { outcome: "skipped_failed_non_settled_attempt" }
   | { outcome: "unresolved_payment" }
   | { outcome: "unresolved_refund" }
   | { outcome: "skipped"; reason: "invalid_payload" | "not_found" };
@@ -168,15 +172,19 @@ export class SquareCommerceNormalizer {
     if (classified.kind === "invalid_order_money") {
       return { outcome: "skipped_invalid_order_money" };
     }
+    if (!squareOrderEligibleAsHistoricalSale(snapshot.payload)) {
+      return { outcome: "skipped_nonterminal_order" };
+    }
     const money = classified.money;
 
     const status = squareOrderStatus(snapshot.payload.state);
     const source = nestedObject(snapshot.payload.source);
     const sourceType =
       stringValue(source?.name) ?? stringValue(source?.type);
-    const occurredAt =
-      parseInstant(snapshot.payload.closed_at) ??
-      parseInstant(snapshot.payload.created_at);
+    const occurredAt = parseInstant(snapshot.payload.closed_at);
+    if (!occurredAt) {
+      return { outcome: "skipped_nonterminal_order" };
+    }
 
     let saleId = await this.findResolved(
       db,
@@ -427,6 +435,15 @@ export class SquareCommerceNormalizer {
       );
     }
     if (!saleId) {
+      const latestOrder = await this.latestOrderSnapshot(db, orderId);
+      if (
+        classifySquareSourcePayment(snapshot.payload, {
+          saleResolved: false,
+          orderPayload: latestOrder?.payload,
+        }) === "failed_non_settled_attempt"
+      ) {
+        return { outcome: "skipped_failed_non_settled_attempt" };
+      }
       return { outcome: "unresolved_payment" };
     }
 
@@ -516,6 +533,34 @@ export class SquareCommerceNormalizer {
       return { appliedSale: false };
     }
 
+    const latest = await this.latestOrderSnapshot(db, orderId);
+    if (!latest) {
+      return { appliedSale: false };
+    }
+    if (!squareOrderEligibleAsHistoricalSale(latest.payload)) {
+      return { appliedSale: false };
+    }
+
+    const result = await this.applySnapshot(db, latest.id);
+    if (result.outcome === "applied" && result.kind === "sale") {
+      return {
+        appliedSale: true,
+        unresolvedCatalogLines: result.unresolvedCatalogLines,
+        customNonCatalogLines: result.customNonCatalogLines,
+      };
+    }
+    return { appliedSale: false };
+  }
+
+  private async latestOrderSnapshot(
+    db: SquareCommerceDb,
+    orderId: string,
+  ): Promise<{
+    id: string;
+    externalId: string;
+    payload: Record<string, unknown>;
+    observedAt: Date;
+  } | undefined> {
     const rows = await db
       .select({
         id: sourceSnapshots.id,
@@ -531,20 +576,7 @@ export class SquareCommerceNormalizer {
           eq(sourceSnapshots.externalId, orderId),
         ),
       );
-    const latest = pickLatestSnapshotByExternalId(rows);
-    if (!latest) {
-      return { appliedSale: false };
-    }
-
-    const result = await this.applySnapshot(db, latest.id);
-    if (result.outcome === "applied" && result.kind === "sale") {
-      return {
-        appliedSale: true,
-        unresolvedCatalogLines: result.unresolvedCatalogLines,
-        customNonCatalogLines: result.customNonCatalogLines,
-      };
-    }
-    return { appliedSale: false };
+    return pickLatestSnapshotByExternalId(rows);
   }
 
   private async applyRefund(
