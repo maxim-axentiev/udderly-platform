@@ -19,7 +19,10 @@ import {
   moneyCurrency,
   netProcessingFeeCost,
 } from "./square.commerce.money";
-import { pickLatestSnapshotByExternalId } from "./square.commerce.snapshots";
+import {
+  indexLatestSnapshotsByExternalId,
+  pickLatestSnapshotByExternalId,
+} from "./square.commerce.snapshots";
 import {
   squareOrderStatus,
   squarePaymentMethod,
@@ -63,6 +66,11 @@ export type SquareCommerceApplyResult =
   | { outcome: "skipped_invalid_order_money" }
   | { outcome: "skipped_nonterminal_order" }
   | { outcome: "skipped_failed_non_settled_attempt" }
+  | { outcome: "skipped_canceled_card_void" }
+  | {
+      outcome: "skipped_open_order_cash_receipt";
+      amount: number;
+    }
   | { outcome: "unresolved_payment" }
   | { outcome: "unresolved_refund" }
   | { outcome: "skipped"; reason: "invalid_payload" | "not_found" };
@@ -410,16 +418,48 @@ export class SquareCommerceNormalizer {
     db: SquareCommerceDb,
     snapshot: { externalId: string; payload: Record<string, unknown> },
   ): Promise<SquareCommerceApplyResult> {
+    const existingPaymentId = await this.findResolved(
+      db,
+      SQUARE_PAYMENT_ENTITY,
+      snapshot.externalId,
+      INTERNAL_PAYMENT,
+    );
     const orderId = stringValue(snapshot.payload.order_id);
+    const latestOrder = orderId
+      ? await this.latestOrderSnapshot(db, orderId)
+      : undefined;
+    const existingSaleId = orderId
+      ? await this.findResolved(db, SQUARE_ORDER_ENTITY, orderId, INTERNAL_SALE)
+      : undefined;
+    const siblingPayments = orderId
+      ? await this.latestPaymentPayloadsForOrder(
+          db,
+          orderId,
+          snapshot.externalId,
+        )
+      : [];
+    const paymentClass = classifySquareSourcePayment(snapshot.payload, {
+      saleResolved: Boolean(existingSaleId),
+      paymentResolved: Boolean(existingPaymentId),
+      orderPayload: latestOrder?.payload,
+      siblingPayments,
+    });
+    if (paymentClass === "failed_non_settled_attempt") {
+      return { outcome: "skipped_failed_non_settled_attempt" };
+    }
+    if (paymentClass === "canceled_card_void") {
+      return { outcome: "skipped_canceled_card_void" };
+    }
+    if (paymentClass === "open_order_cash_receipt") {
+      return {
+        outcome: "skipped_open_order_cash_receipt",
+        amount: nonNegativeMoney(moneyAmount(snapshot.payload.amount_money)),
+      };
+    }
     if (!orderId) {
       return { outcome: "unresolved_payment" };
     }
-    let saleId = await this.findResolved(
-      db,
-      SQUARE_ORDER_ENTITY,
-      orderId,
-      INTERNAL_SALE,
-    );
+    let saleId = existingSaleId;
     let dependency: {
       appliedSale: boolean;
       unresolvedCatalogLines?: number;
@@ -435,15 +475,6 @@ export class SquareCommerceNormalizer {
       );
     }
     if (!saleId) {
-      const latestOrder = await this.latestOrderSnapshot(db, orderId);
-      if (
-        classifySquareSourcePayment(snapshot.payload, {
-          saleResolved: false,
-          orderPayload: latestOrder?.payload,
-        }) === "failed_non_settled_attempt"
-      ) {
-        return { outcome: "skipped_failed_non_settled_attempt" };
-      }
       return { outcome: "unresolved_payment" };
     }
 
@@ -474,13 +505,7 @@ export class SquareCommerceNormalizer {
       updatedAt: new Date(),
     };
 
-    const existingId = await this.findResolved(
-      db,
-      SQUARE_PAYMENT_ENTITY,
-      snapshot.externalId,
-      INTERNAL_PAYMENT,
-    );
-    let paymentId = existingId;
+    let paymentId = existingPaymentId;
     if (paymentId) {
       await db.update(payments).set(values).where(eq(payments.id, paymentId));
     } else {
@@ -577,6 +602,32 @@ export class SquareCommerceNormalizer {
         ),
       );
     return pickLatestSnapshotByExternalId(rows);
+  }
+
+  private async latestPaymentPayloadsForOrder(
+    db: SquareCommerceDb,
+    orderId: string,
+    excludePaymentId: string,
+  ): Promise<Record<string, unknown>[]> {
+    const rows = await db
+      .select({
+        id: sourceSnapshots.id,
+        externalId: sourceSnapshots.externalId,
+        payload: sourceSnapshots.payload,
+        observedAt: sourceSnapshots.observedAt,
+      })
+      .from(sourceSnapshots)
+      .where(
+        and(
+          eq(sourceSnapshots.provider, SQUARE_PROVIDER),
+          eq(sourceSnapshots.entityType, SQUARE_PAYMENT_ENTITY),
+          sql`${sourceSnapshots.payload}->>'order_id' = ${orderId}`,
+        ),
+      );
+    const latest = indexLatestSnapshotsByExternalId(rows);
+    return [...latest.values()]
+      .filter((row) => row.externalId !== excludePaymentId)
+      .map((row) => row.payload);
   }
 
   private async applyRefund(

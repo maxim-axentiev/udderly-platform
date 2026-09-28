@@ -1,4 +1,5 @@
 import { moneyAmount } from "./square.commerce.money";
+import { squarePaymentClassifiableWithoutOrder } from "./square.commerce.payment-class";
 import { SQUARE_ORDERS_BATCH_RETRIEVE_LIMIT } from "./square.constants";
 import { instantInUtcRange, type SquareFarmWindow } from "./square.range";
 import type { SquareUtcRange } from "./square.types";
@@ -51,6 +52,13 @@ export function discoverMissingPaymentOrderDependencies(
       continue;
     }
     if (options.orderSnapshotIds.has(orderId)) {
+      continue;
+    }
+    if (
+      squarePaymentClassifiableWithoutOrder(payment.payload, {
+        paymentResolved: false,
+      })
+    ) {
       continue;
     }
     unresolvedPayments += 1;

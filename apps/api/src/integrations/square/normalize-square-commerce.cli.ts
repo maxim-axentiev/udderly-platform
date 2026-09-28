@@ -45,6 +45,11 @@ async function main(): Promise<void> {
     console.log(
       `Failed non-settled payment attempts skipped: ${result.failedNonSettledPaymentAttemptsSkipped}`,
     );
+    console.log(`Canceled card voids skipped: ${result.canceledCardVoidsSkipped}`);
+    console.log(`Open-order cash receipts: ${result.openOrderCashReceipts}`);
+    console.log(
+      `Open-order cash receipt amount: ${result.openOrderCashReceiptAmount}`,
+    );
     console.log(`Unresolved refunds: ${result.unresolvedRefunds}`);
     console.log(`Dependency orders applied: ${result.dependencyOrdersApplied}`);
     console.log(

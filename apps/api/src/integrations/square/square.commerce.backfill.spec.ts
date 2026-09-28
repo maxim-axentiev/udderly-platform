@@ -10,6 +10,7 @@ import {
   formatSquareCommerceBackfillDryRun,
   parseSquareCommerceBackfillArgs,
   runSquareCommerceBackfill,
+  shouldAttemptPaymentOrderRecovery,
   squareCommerceMonthChunks,
   type SquareCommerceBackfillDeps,
 } from "./square.commerce.backfill";
@@ -56,6 +57,9 @@ function normalizeSummary(): SquareCommerceNormalizeSummary {
     invalidOrderMoneySkipped: 0,
     dependencyOrdersApplied: 0,
     failedNonSettledPaymentAttemptsSkipped: 0,
+    canceledCardVoidsSkipped: 0,
+    openOrderCashReceipts: 0,
+    openOrderCashReceiptAmount: 0,
   };
 }
 
@@ -816,5 +820,57 @@ test("recovery O. later months continue only after PASS", async () => {
     "2025-12-01/2025-12-31",
   ]);
   assert.equal(recorded.catalogRecovers, 1);
+});
+
+test("R. bounded recovery is not attempted when provider-only classes already balance payments", () => {
+  const verdict = verdictFrom({
+    sourcePayments: 4,
+    canonicalizableSourcePayments: 1,
+    failedNonSettledAttempts: 1,
+    canceledCardVoids: 1,
+    openOrderCashReceipts: 1,
+    canonicalPayments: 1,
+    sourcePaymentAmount: 1000,
+    canonicalPaymentAmount: 1000,
+    failedAttemptRequestedAmount: 12053,
+    canceledCardVoidRequestedAmount: 10000,
+    openOrderCashReceiptAmount: 45,
+  });
+  assert.equal(verdict.passed, true);
+  assert.equal(shouldAttemptPaymentOrderRecovery(verdict, false), false);
+  assert.equal(shouldAttemptPaymentOrderRecovery(verdict, true), false);
+});
+
+test("S. dry-run remains side-effect free for November-shaped payment gaps", async () => {
+  const recorded = healingDeps({
+    reconQueue: [
+      verdictFrom({
+        sourcePayments: 234,
+        canonicalizableSourcePayments: 227,
+        failedNonSettledAttempts: 5,
+        canceledCardVoids: 1,
+        openOrderCashReceipts: 1,
+        canonicalPayments: 0,
+        sourcePaymentAmount: 1000,
+        canonicalPaymentAmount: 0,
+        openOrderCashReceiptAmount: 45,
+      }),
+    ],
+    paymentMissing: 1,
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    { from: "2024-11-01", to: "2024-11-30", dryRun: true },
+    () => undefined,
+  );
+  assert.equal(result.ok, true);
+  if (!result.ok) {
+    return;
+  }
+  assert.equal(result.dryRun, true);
+  assert.deepEqual(recorded.imports, []);
+  assert.equal(recorded.paymentRecovers, 0);
+  assert.equal(recorded.catalogRecovers, 0);
+  assert.equal(recorded.normalizes.length, 0);
 });
 

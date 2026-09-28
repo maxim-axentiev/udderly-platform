@@ -484,6 +484,11 @@ function logNormalize(
   log(
     `Failed non-settled payment attempts skipped: ${normalized.failedNonSettledPaymentAttemptsSkipped}`,
   );
+  log(`Canceled card voids skipped: ${normalized.canceledCardVoidsSkipped}`);
+  log(`Open-order cash receipts: ${normalized.openOrderCashReceipts}`);
+  log(
+    `Open-order cash receipt amount: ${normalized.openOrderCashReceiptAmount}`,
+  );
   log(`Dependency orders applied: ${normalized.dependencyOrdersApplied}`);
   log(`Unresolved refunds: ${normalized.unresolvedRefunds}`);
   log(

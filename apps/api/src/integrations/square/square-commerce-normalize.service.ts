@@ -34,6 +34,9 @@ export type SquareCommerceNormalizeSummary = {
   invalidOrderMoneySkipped: number;
   dependencyOrdersApplied: number;
   failedNonSettledPaymentAttemptsSkipped: number;
+  canceledCardVoidsSkipped: number;
+  openOrderCashReceipts: number;
+  openOrderCashReceiptAmount: number;
 };
 
 @Injectable()
@@ -74,6 +77,9 @@ export class SquareCommerceNormalizeService {
       invalidOrderMoneySkipped: 0,
       dependencyOrdersApplied: 0,
       failedNonSettledPaymentAttemptsSkipped: 0,
+      canceledCardVoidsSkipped: 0,
+      openOrderCashReceipts: 0,
+      openOrderCashReceiptAmount: 0,
     };
 
     for (const snapshot of orders) {
@@ -112,6 +118,11 @@ export class SquareCommerceNormalizeService {
         summary.customNonCatalogLines += result.customNonCatalogLines ?? 0;
       } else if (result.outcome === "skipped_failed_non_settled_attempt") {
         summary.failedNonSettledPaymentAttemptsSkipped += 1;
+      } else if (result.outcome === "skipped_canceled_card_void") {
+        summary.canceledCardVoidsSkipped += 1;
+      } else if (result.outcome === "skipped_open_order_cash_receipt") {
+        summary.openOrderCashReceipts += 1;
+        summary.openOrderCashReceiptAmount += result.amount;
       } else if (result.outcome === "unresolved_payment") {
         summary.unresolvedPayments += 1;
       } else if (result.outcome === "skipped_stale") {

@@ -209,8 +209,11 @@ A payment can reference `payment.order_id` for an order whose `closed_at` is out
 - have `order_id`
 - do not already resolve `square / payment / <id>` to a canonical payment
 - have no `square / order / <order_id>` snapshot
+- are **not** already a payment-only provider class (`FAILED` CARD non-settled attempt or `CANCELED` CARD void)
 
-It then `POST`s `/v2/orders/batch-retrieve` with those exact order ids (up to 100 per request). Output is aggregate-only (no payment ids or order ids). Missing returned ids are counted, not invented. Closed-at is reported as before / inside / after the requested payment window, or missing.
+Those payment-only classes do not call `BatchRetrieveOrders`. Exact order recovery remains for payments whose class still depends on order evidence (including `CANCELED` CASH).
+
+It then `POST`s `/v2/orders/batch-retrieve` with those remaining exact order ids (up to 100 per request). Output is aggregate-only (no payment ids or order ids). Missing returned ids are counted, not invented. Closed-at is reported as before / inside / after the requested payment window, or missing.
 
 `--dry-run` reads the database only: no Square API calls and no writes.
 
@@ -218,7 +221,11 @@ Existing order sanitization and `source_snapshot` hash dedupe apply. Recovery do
 
 Normalize, when attaching a payment, will apply that exact latest order snapshot as a **dependency** if a canonical sale is still missing — even when `order.closed_at` is outside the payment window. The dependency may create/reuse a sale only when the order is eligible under the same historical closed-order semantics (`closed_at` present, not OPEN/DRAFT). `sale.occurred_at` stays `closed_at`; `created_at` is not used as a fallback. OPEN recovered carts stay as `source_snapshot` evidence and do not become sales merely because they have gross money.
 
-A **failed non-settled attempt** is a narrow payment class: `status=FAILED`, approved and refunded money missing or zero, no processing-fee evidence, no canonical sale, and the recovered order (when present) is nonterminal OPEN/DRAFT with no `closed_at`. Those snapshots stay; no canonical payment, sale, or refund is created; `amount_money` is requested amount only. Anything else (approved funds, fees, refunds, missing order, non-FAILED, or a sale dependency) stays unresolved and fails reconcile. Do not skip every FAILED payment.
+A **failed non-settled attempt** is a provider-only payment class. An explicit `FAILED` `CARD` payment with approved and refunded money missing or zero, no processing-fee evidence, and no existing canonical payment is classified from payment evidence alone (the historical order may be missing). A non-CARD `FAILED` payment still requires a nonterminal OPEN/DRAFT order with no `closed_at`. Those snapshots stay; no canonical payment, sale, or refund is created; `amount_money` is requested amount only. Do not skip every FAILED payment.
+
+A **canceled card void** is `CANCELED` + `CARD` with no refund and no processing-fee evidence and no existing canonical payment. `approved_money` may be > 0 from a prior authorization; it is not received money. No sale, payment, refund, revenue, or PERSON is created.
+
+An **open-order cash receipt** is a narrow `CANCELED` `CASH` class on an exact OPEN/DRAFT order (`closed_at` null) with no canonical sale, no refund/fee evidence, a positive cash amount strictly less than a positive order total, and a sibling FAILED or CANCELED CARD on the same order whose card amount plus the cash amount equals the order total. The cash amount is reported separately as source-side cash movement. It is not canonical sale revenue and does not invent a sale or canonical payment. Arbitrary `CANCELED` CASH records are not skipped.
 
 Synthetic tests:
 
@@ -304,7 +311,7 @@ The latest order payload is the current line set. Lines no longer present are `i
 
 ### Payments and refunds
 
-Payments resolve sale by exact `order_id`. Unresolved payments do not invent a sale. Failed non-settled attempts (FAILED + OPEN/nonterminal order + no approved/refunded/fee money) do not create a canonical payment. `source_type` maps `CARD`/`CASH`/`EXTERNAL` → `card`/`cash`/`external`; anything else explicit → `other`. EXTERNAL is a tender type, not unpaid.
+Payments resolve sale by exact `order_id`. Unresolved payments do not invent a sale. Failed non-settled CARD attempts do not require an order snapshot. Canceled CARD voids do not create canonical money. Open-order cash receipts preserve CANCELED CASH evidence without creating a sale. `source_type` maps `CARD`/`CASH`/`EXTERNAL` → `card`/`cash`/`external`; anything else explicit → `other`. EXTERNAL is a tender type, not unpaid.
 
 Refunds resolve `payment_id` first (copy that payment’s `sale_id`), else exact `order_id`. Amounts stay positive.
 
@@ -316,7 +323,7 @@ No PERSON. `customer_id` becomes unresolved `source_identity`. No Instant Profil
 
 One transaction per order (sale + current lines + identities). One transaction per payment. One transaction per refund. Newest snapshot (`observed_at`, then `updated_at`, then `version`) wins; older apply is `skipped_stale`. Unchanged sanitized payloads do not insert extra snapshots.
 
-Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Custom/non-catalog lines` separately from `Unresolved catalog lines`. It also reports `Return-only orders skipped`, `Return-adjustment non-sales skipped`, `Invalid order money skipped`, `Dependency orders applied`, and `Failed non-settled payment attempts skipped` separately. `Payments` is canonical payments applied, not raw Square payment records. Ordinary normalize does not delete previously created sales. Already-canonical dependency sales are reused and are not counted as newly applied.
+Normalize order: latest orders in the farm window, then payments, then refunds. The CLI reports `Custom/non-catalog lines` separately from `Unresolved catalog lines`. It also reports `Return-only orders skipped`, `Return-adjustment non-sales skipped`, `Invalid order money skipped`, `Dependency orders applied`, `Failed non-settled payment attempts skipped`, `Canceled card voids skipped`, and `Open-order cash receipts` / amount separately. `Payments` is canonical payments applied, not raw Square payment records. Ordinary normalize does not delete previously created sales. Already-canonical dependency sales are reused and are not counted as newly applied.
 
 ### Reconciliation (read-only)
 
@@ -327,7 +334,7 @@ npm run reconcile:square-commerce -- --date 2026-09-12
 
 Compares latest `source_snapshot` rows in the America/Toronto farm window to canonical sales, lines, payments, and refunds. It does not write. Money rules are the same as normalize (gross top-level sale totals excluding tip; return-only and return-adjustment non-sales are not sales; payment `amount_money` / `tip_money` for **canonicalizable** payments; nonnegative net processing-fee cost; separate refunds).
 
-PASS requires matching canonicalizable source/canonical payment counts and money, `source payment records = canonicalizable + valid skipped failed attempts + any other explicit provider-only payment classes`, `Invalid orders: 0`, and `Unresolved variations: 0`. Failed non-settled attempts are valid provider evidence and do not fail; their requested `amount_money` is reported separately and is not part of the canonicalizable source payment total. Custom/non-catalog lines are valid and do not fail. Return-only orders and return-adjustment non-sales are valid provider records and do not fail. Inactive lines do not fail when they match the current source line set. Any other unresolved payment still FAILs. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
+PASS requires matching canonicalizable source/canonical payment counts and money, `source payment records = canonicalizable + failed non-settled attempts + canceled card voids + open-order cash receipts + any other explicit provider-only payment classes`, `Invalid orders: 0`, and `Unresolved variations: 0`. Failed non-settled attempts and canceled card voids are valid provider evidence and do not fail; their requested `amount_money` is reported separately and is not received money. Open-order cash receipt amount is reported separately and is not canonical sale revenue. Custom/non-catalog lines are valid and do not fail. Return-only orders and return-adjustment non-sales are valid provider records and do not fail. Inactive lines do not fail when they match the current source line set. Any other unresolved payment still FAILs. FAIL prints aggregate differences only (no Square ids, customer ids, names, or payloads) and exits nonzero.
 
 ### Historical commerce backfill (manual)
 
@@ -344,7 +351,7 @@ Each live chunk is import → normalize → reconcile. On reconcile FAIL, the ru
 
 `--dry-run` prints the chunk list and performs no Square API calls and no database writes (it does not start the Nest app and does not run recovery).
 
-Valid failed non-settled payment attempts do not fail reconcile and do not stop the backfill. Genuinely unresolved or ambiguous payments still FAIL and stop. A rerun is safe: snapshots deduplicate by hash, normalize is idempotent, and there is no extra backfill checkpoint store.
+Valid failed non-settled payment attempts, canceled card voids, and open-order cash receipts do not fail reconcile and do not stop the backfill. The runner classifies those payment-only cases before deciding that a missing exact order requires recovery. Genuinely unresolved or ambiguous payments still FAIL and stop. A rerun is safe: snapshots deduplicate by hash, normalize is idempotent, and there is no extra backfill checkpoint store.
 
 The already-proven production window is 2026-08-17 through 2026-09-15. Choose `--to` before that range for the first historical run. Do not assume a fixed earliest Square date; pass `--from` explicitly.
 

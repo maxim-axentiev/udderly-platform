@@ -151,7 +151,7 @@ test("G. valid skipped failed non-settled attempt is PASS", () => {
   const report = formatSquareCommerceReconcile(verdict);
   assert.match(report, /Source payment records: 2/);
   assert.match(report, /Canonicalizable source payments: 1/);
-  assert.match(report, /Failed non-settled attempts: 1/);
+  assert.match(report, /Failed non-settled card attempts: 1/);
   assert.match(report, /Failed attempt requested amount: 19972/);
   assert.match(report, /Source canonical payment amount: 1000/);
 });
@@ -167,6 +167,66 @@ test("K. unresolved non-failed payment remains FAIL", () => {
   );
   assert.equal(verdict.passed, false);
   assert.match(verdict.differences.join("\n"), /Payment counts/);
+});
+
+test("P. November-style provider-only payment decomposition is PASS", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourcePayments: 234,
+      canonicalizableSourcePayments: 227,
+      failedNonSettledAttempts: 5,
+      canceledCardVoids: 1,
+      openOrderCashReceipts: 1,
+      canonicalPayments: 227,
+      sourcePaymentAmount: 1000,
+      canonicalPaymentAmount: 1000,
+      failedAttemptRequestedAmount: 53185,
+      canceledCardVoidRequestedAmount: 10000,
+      openOrderCashReceiptAmount: 45,
+    }),
+  );
+  assert.equal(verdict.passed, true);
+  const report = formatSquareCommerceReconcile(verdict);
+  assert.match(report, /Source payment records: 234/);
+  assert.match(report, /Canonicalizable source payments: 227/);
+  assert.match(report, /Failed non-settled card attempts: 5/);
+  assert.match(report, /Canceled card voids: 1/);
+  assert.match(report, /Open-order cash receipts: 1/);
+  assert.match(report, /Canonical payments: 227/);
+  assert.match(report, /Open-order cash receipt amount: 45/);
+  assert.match(report, /Result: PASS/);
+});
+
+test("Q. unknown payment outside recognized classes still FAILs", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourcePayments: 2,
+      canonicalizableSourcePayments: 2,
+      failedNonSettledAttempts: 0,
+      canceledCardVoids: 0,
+      openOrderCashReceipts: 0,
+      canonicalPayments: 1,
+    }),
+  );
+  assert.equal(verdict.passed, false);
+  assert.match(verdict.differences.join("\n"), /Payment counts/);
+});
+
+test("open-order cash receipt amount is reported and excluded from canonical payment amount", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourcePayments: 2,
+      canonicalizableSourcePayments: 1,
+      openOrderCashReceipts: 1,
+      canonicalPayments: 1,
+      sourcePaymentAmount: 1000,
+      canonicalPaymentAmount: 1000,
+      openOrderCashReceiptAmount: 45,
+    }),
+  );
+  assert.equal(verdict.passed, true);
+  assert.equal(verdict.totals.sourcePaymentAmount, 1000);
+  assert.equal(verdict.totals.openOrderCashReceiptAmount, 45);
 });
 
 test("refund mismatch is FAIL", () => {

@@ -16,6 +16,7 @@ function payment(
   id: string,
   orderId: string | undefined,
   amount: number,
+  extras: Record<string, unknown> = {},
 ): { externalId: string; payload: Record<string, unknown> } {
   return {
     externalId: id,
@@ -23,6 +24,7 @@ function payment(
       id,
       ...(orderId ? { order_id: orderId } : {}),
       amount_money: { amount, currency: "CAD" },
+      ...extras,
     },
   };
 }
@@ -89,6 +91,77 @@ test("payments without order_id are not discovered", () => {
     },
   );
   assert.equal(discovery.unresolvedPayments, 0);
+});
+
+test("B. FAILED CARD missing-order does not trigger order recovery", () => {
+  const discovery = discoverMissingPaymentOrderDependencies(
+    [
+      payment("PAY-FAIL-MISSING", "ORDER-GONE", 12053, {
+        status: "FAILED",
+        source_type: "CARD",
+        approved_money: { amount: 0, currency: "CAD" },
+        refunded_money: { amount: 0, currency: "CAD" },
+      }),
+    ],
+    {
+      resolvedPaymentIds: new Set(),
+      orderSnapshotIds: new Set(),
+    },
+  );
+  assert.equal(discovery.unresolvedPayments, 0);
+  assert.equal(discovery.distinctMissingOrderIds.length, 0);
+});
+
+test("CANCELED CARD missing-order does not trigger order recovery", () => {
+  const discovery = discoverMissingPaymentOrderDependencies(
+    [
+      payment("PAY-VOID-MISSING", "ORDER-GONE", 10000, {
+        status: "CANCELED",
+        source_type: "CARD",
+        approved_money: { amount: 10000, currency: "CAD" },
+        refunded_money: { amount: 0, currency: "CAD" },
+      }),
+    ],
+    {
+      resolvedPaymentIds: new Set(),
+      orderSnapshotIds: new Set(),
+    },
+  );
+  assert.equal(discovery.unresolvedPayments, 0);
+});
+
+test("CANCELED CASH missing-order still needs exact order recovery", () => {
+  const discovery = discoverMissingPaymentOrderDependencies(
+    [
+      payment("PAY-CASH-MISSING", "ORDER-SPLIT", 45, {
+        status: "CANCELED",
+        source_type: "CASH",
+      }),
+    ],
+    {
+      resolvedPaymentIds: new Set(),
+      orderSnapshotIds: new Set(),
+    },
+  );
+  assert.equal(discovery.unresolvedPayments, 1);
+  assert.deepEqual(discovery.distinctMissingOrderIds, ["ORDER-SPLIT"]);
+});
+
+test("FAILED CASH missing-order still needs exact order recovery", () => {
+  const discovery = discoverMissingPaymentOrderDependencies(
+    [
+      payment("PAY-FAIL-CASH", "ORDER-CASH", 45, {
+        status: "FAILED",
+        source_type: "CASH",
+        approved_money: { amount: 0, currency: "CAD" },
+      }),
+    ],
+    {
+      resolvedPaymentIds: new Set(),
+      orderSnapshotIds: new Set(),
+    },
+  );
+  assert.equal(discovery.unresolvedPayments, 1);
 });
 
 test("E. order ids batch in groups of 100", () => {

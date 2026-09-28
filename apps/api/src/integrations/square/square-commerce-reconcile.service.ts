@@ -13,6 +13,7 @@ import { classifySquareOrderMoney, moneyAmount, netProcessingFeeCost } from "./s
 import {
   classifySquareSourcePayment,
   failedAttemptRequestedAmount,
+  openOrderCashReceiptAmount,
 } from "./square.commerce.payment-class";
 import {
   emptyReconcileTotals,
@@ -127,6 +128,20 @@ export class SquareCommerceReconcileService {
       SQUARE_ORDER_ENTITY,
       INTERNAL_SALE,
     );
+    const resolvedPayments = await this.resolvedExternalIds(
+      SQUARE_PAYMENT_ENTITY,
+      INTERNAL_PAYMENT,
+    );
+    const paymentsByOrderId = new Map<string, Record<string, unknown>[]>();
+    for (const row of indexLatestSnapshotsByExternalId(paymentRows).values()) {
+      const siblingOrderId = stringValue(row.payload.order_id);
+      if (!siblingOrderId) {
+        continue;
+      }
+      const siblings = paymentsByOrderId.get(siblingOrderId) ?? [];
+      siblings.push(row.payload);
+      paymentsByOrderId.set(siblingOrderId, siblings);
+    }
 
     for (const snapshot of paymentSnapshots) {
       const orderId = stringValue(snapshot.payload.order_id);
@@ -134,14 +149,33 @@ export class SquareCommerceReconcileService {
         ? latestOrdersById.get(orderId)?.payload
         : undefined;
       const saleResolved = Boolean(orderId && resolvedSales.has(orderId));
-      if (
-        classifySquareSourcePayment(snapshot.payload, {
-          saleResolved,
-          orderPayload,
-        }) === "failed_non_settled_attempt"
-      ) {
+      const paymentClass = classifySquareSourcePayment(snapshot.payload, {
+        saleResolved,
+        paymentResolved: resolvedPayments.has(snapshot.externalId),
+        orderPayload,
+        siblingPayments: orderId
+          ? (paymentsByOrderId.get(orderId) ?? []).filter(
+              (sibling) => stringValue(sibling.id) !== snapshot.externalId,
+            )
+          : [],
+      });
+      if (paymentClass === "failed_non_settled_attempt") {
         totals.failedNonSettledAttempts += 1;
         totals.failedAttemptRequestedAmount += failedAttemptRequestedAmount(
+          snapshot.payload,
+        );
+        continue;
+      }
+      if (paymentClass === "canceled_card_void") {
+        totals.canceledCardVoids += 1;
+        totals.canceledCardVoidRequestedAmount += failedAttemptRequestedAmount(
+          snapshot.payload,
+        );
+        continue;
+      }
+      if (paymentClass === "open_order_cash_receipt") {
+        totals.openOrderCashReceipts += 1;
+        totals.openOrderCashReceiptAmount += openOrderCashReceiptAmount(
           snapshot.payload,
         );
         continue;
