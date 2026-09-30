@@ -78,6 +78,34 @@ export class SquareClient {
     });
   }
 
+  async retrievePayment(
+    paymentId: string,
+  ): Promise<Record<string, unknown> | undefined> {
+    const id = paymentId.trim();
+    if (!id) {
+      return undefined;
+    }
+    try {
+      const payload = await this.request(
+        "GET",
+        `/v2/payments/${encodeURIComponent(id)}`,
+      );
+      if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+        return undefined;
+      }
+      const payment = payload.payment;
+      if (!payment || typeof payment !== "object" || Array.isArray(payment)) {
+        return undefined;
+      }
+      return payment as Record<string, unknown>;
+    } catch (error) {
+      if (error instanceof SquareApiError && error.statusCode === 404) {
+        return undefined;
+      }
+      throw error;
+    }
+  }
+
   async listRefunds(range: SquareUtcRange): Promise<Record<string, unknown>[]> {
     return this.paginateGet("/v2/refunds", "refunds", {
       begin_time: range.startAt,

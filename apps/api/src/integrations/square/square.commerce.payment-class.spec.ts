@@ -4,6 +4,8 @@ import {
   classifySquareSourcePayment,
   openOrderCashReceiptAmount,
   squarePaymentClassifiableWithoutOrder,
+  UNCAPTURED_AUTHORIZED_CARD_MAX_HOLD_MS,
+  type SquareUncapturedRecoveryProvenance,
 } from "./square.commerce.payment-class";
 import { squareOrderEligibleAsHistoricalSale } from "./square.commerce.order";
 
@@ -360,5 +362,356 @@ test("CLOSED FAILED CASH without an OPEN order remains unresolved", () => {
       orderPayload: CLOSED_ORDER,
     }),
     undefined,
+  );
+});
+
+function uncapturedCard(
+  overrides: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: "PAY-AUTH",
+    order_id: "ORDER-GONE",
+    status: "APPROVED",
+    source_type: "CARD",
+    created_at: "2023-11-18T18:52:11.113Z",
+    amount_money: { amount: 270, currency: "CAD" },
+    approved_money: { amount: 270, currency: "CAD" },
+    total_money: { amount: 270, currency: "CAD" },
+    card_details: {
+      status: "AUTHORIZED",
+      entry_method: "CONTACTLESS",
+      card_payment_timeline: {
+        authorized_at: "2023-11-18T18:52:11.340Z",
+      },
+    },
+    ...overrides,
+  };
+}
+
+const NOW_AFTER_HOLD = new Date("2026-09-29T00:00:00.000Z");
+const NOW_WITHIN_HOLD = new Date("2023-11-20T18:52:11.340Z");
+
+function uncapturedContext(
+  overrides: Partial<{
+    saleResolved: boolean;
+    paymentResolved: boolean;
+    uncapturedRecovery: SquareUncapturedRecoveryProvenance;
+    now: Date;
+    orderPayload: Record<string, unknown>;
+  }> = {},
+) {
+  return {
+    saleResolved: false,
+    uncapturedRecovery: {
+      orderRequestedFromSquareAndMissing: true,
+      exactPaymentRefreshObserved: true,
+    },
+    now: NOW_AFTER_HOLD,
+    ...overrides,
+  };
+}
+
+test("A. old APPROVED AUTHORIZED CARD with missing order is uncaptured_authorized_card", () => {
+  assert.equal(
+    classifySquareSourcePayment(uncapturedCard(), uncapturedContext()),
+    "uncaptured_authorized_card",
+  );
+  assert.equal(
+    squarePaymentClassifiableWithoutOrder(uncapturedCard(), {
+      paymentResolved: false,
+    }),
+    false,
+  );
+});
+
+test("B. recent APPROVED AUTHORIZED CARD remains unresolved", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard(),
+      uncapturedContext({ now: NOW_WITHIN_HOLD }),
+    ),
+    undefined,
+  );
+});
+
+test("C. APPROVED CARD with captured_at is not uncaptured", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({
+        card_details: {
+          status: "AUTHORIZED",
+          card_payment_timeline: {
+            authorized_at: "2023-11-18T18:52:11.340Z",
+            captured_at: "2023-11-18T18:52:12.000Z",
+          },
+        },
+      }),
+      uncapturedContext(),
+    ),
+    undefined,
+  );
+});
+
+test("D. APPROVED CARD with processing fee is not uncaptured", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({
+        processing_fee: [
+          { type: "INITIAL", amount_money: { amount: 8, currency: "CAD" } },
+        ],
+      }),
+      uncapturedContext(),
+    ),
+    undefined,
+  );
+});
+
+test("E. COMPLETED CARD missing order is not uncaptured", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({ status: "COMPLETED" }),
+      uncapturedContext(),
+    ),
+    undefined,
+  );
+});
+
+test("F. old APPROVED CASH is not uncaptured_authorized_card", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({ source_type: "CASH" }),
+      uncapturedContext(),
+    ),
+    undefined,
+  );
+});
+
+test("G. old APPROVED EXTERNAL is not uncaptured_authorized_card", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({ source_type: "EXTERNAL" }),
+      uncapturedContext(),
+    ),
+    undefined,
+  );
+});
+
+test("H. recovered order context does not uncaptured-classify", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard(),
+      uncapturedContext({
+        uncapturedRecovery: undefined,
+        orderPayload: CLOSED_ORDER,
+      }),
+    ),
+    undefined,
+  );
+});
+
+test("I. COMPLETED refresh is not uncaptured", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({
+        status: "COMPLETED",
+        card_details: {
+          status: "CAPTURED",
+          card_payment_timeline: {
+            authorized_at: "2023-11-18T18:52:11.340Z",
+            captured_at: "2023-11-18T18:52:12.000Z",
+          },
+        },
+      }),
+      uncapturedContext(),
+    ),
+    undefined,
+  );
+});
+
+test("J. CANCELED refresh uses canceled card void, not uncaptured", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({
+        status: "CANCELED",
+        card_details: { status: "VOIDED" },
+      }),
+      uncapturedContext(),
+    ),
+    "canceled_card_void",
+  );
+});
+
+test("K. FAILED refresh uses failed non-settled when money shape matches", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({
+        status: "FAILED",
+        approved_money: { amount: 0, currency: "CAD" },
+        card_details: { status: "FAILED" },
+      }),
+      uncapturedContext(),
+    ),
+    "failed_non_settled_attempt",
+  );
+});
+
+test("M. delayed_until in the future remains unresolved", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({ delayed_until: "2026-10-01T00:00:00.000Z" }),
+      uncapturedContext({ now: new Date("2026-09-29T00:00:00.000Z") }),
+    ),
+    undefined,
+  );
+});
+
+test("N. delayed_until in the past with other predicates is uncaptured", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({ delayed_until: "2023-11-20T06:52:11.113Z" }),
+      uncapturedContext({ now: NOW_AFTER_HOLD }),
+    ),
+    "uncaptured_authorized_card",
+  );
+});
+
+test("O. authorized_at plus 7 days not elapsed remains unresolved", () => {
+  const authorizedAt = "2023-11-18T18:52:11.340Z";
+  const beforeHold = new Date(
+    Date.parse(authorizedAt) + UNCAPTURED_AUTHORIZED_CARD_MAX_HOLD_MS,
+  );
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard(),
+      uncapturedContext({ now: beforeHold }),
+    ),
+    undefined,
+  );
+});
+
+test("P. authorized_at plus 7 days elapsed is uncaptured", () => {
+  const authorizedAt = "2023-11-18T18:52:11.340Z";
+  const afterHold = new Date(
+    Date.parse(authorizedAt) + UNCAPTURED_AUTHORIZED_CARD_MAX_HOLD_MS + 1,
+  );
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard(),
+      uncapturedContext({ now: afterHold }),
+    ),
+    "uncaptured_authorized_card",
+  );
+});
+
+test("Q. created_at plus 7 days is used when authorized_at is absent", () => {
+  const createdAt = "2023-11-18T18:52:11.113Z";
+  const afterHold = new Date(
+    Date.parse(createdAt) + UNCAPTURED_AUTHORIZED_CARD_MAX_HOLD_MS + 1,
+  );
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({
+        created_at: createdAt,
+        card_details: { status: "AUTHORIZED" },
+      }),
+      uncapturedContext({ now: afterHold }),
+    ),
+    "uncaptured_authorized_card",
+  );
+});
+
+test("U. latest provided snapshot payload is what classification reads", () => {
+  const oldBare = {
+    id: "PAY-AUTH",
+    order_id: "ORDER-GONE",
+    status: "APPROVED",
+    source_type: "CARD",
+    created_at: "2023-11-18T18:52:11.113Z",
+    amount_money: { amount: 270, currency: "CAD" },
+    approved_money: { amount: 270, currency: "CAD" },
+  };
+  assert.equal(
+    classifySquareSourcePayment(oldBare, uncapturedContext()),
+    undefined,
+  );
+  assert.equal(
+    classifySquareSourcePayment(uncapturedCard(), uncapturedContext()),
+    "uncaptured_authorized_card",
+  );
+});
+
+test("APPROVED CARD without card_details settlement evidence is not uncaptured", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      {
+        id: "PAY-BARE",
+        order_id: "ORDER-GONE",
+        status: "APPROVED",
+        source_type: "CARD",
+        created_at: "2023-11-18T18:52:11.113Z",
+        amount_money: { amount: 270, currency: "CAD" },
+        approved_money: { amount: 270, currency: "CAD" },
+      },
+      uncapturedContext(),
+    ),
+    undefined,
+  );
+});
+
+test("AF. missing local order snapshot is not proven unrecoverable", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard(),
+      uncapturedContext({ uncapturedRecovery: undefined }),
+    ),
+    undefined,
+  );
+});
+
+test("AG. GetPayment provenance is required even with complete ListPayments evidence", () => {
+  const orderMissOnly: SquareUncapturedRecoveryProvenance = {
+    orderRequestedFromSquareAndMissing: true,
+    exactPaymentRefreshObserved: false,
+  };
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard(),
+      uncapturedContext({ uncapturedRecovery: orderMissOnly }),
+    ),
+    undefined,
+  );
+});
+
+test("AH. delayed_until present but invalid does not fall back to authorized_at", () => {
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({ delayed_until: "not-a-timestamp" }),
+      uncapturedContext(),
+    ),
+    undefined,
+  );
+});
+
+test("AI. exactly delayed_until is not elapsed", () => {
+  const delayedUntil = "2023-11-20T06:52:11.113Z";
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({ delayed_until: delayedUntil }),
+      uncapturedContext({ now: new Date(delayedUntil) }),
+    ),
+    undefined,
+  );
+});
+
+test("AJ. one millisecond after delayed_until is elapsed", () => {
+  const delayedUntil = "2023-11-20T06:52:11.113Z";
+  assert.equal(
+    classifySquareSourcePayment(
+      uncapturedCard({ delayed_until: delayedUntil }),
+      uncapturedContext({
+        now: new Date(Date.parse(delayedUntil) + 1),
+      }),
+    ),
+    "uncaptured_authorized_card",
   );
 });

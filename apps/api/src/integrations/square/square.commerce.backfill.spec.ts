@@ -14,6 +14,7 @@ import {
   squareCommerceMonthChunks,
   type SquareCommerceBackfillDeps,
 } from "./square.commerce.backfill";
+import type { SquareCommerceWindowRecovery } from "./square.commerce.payment-class";
 import {
   emptyReconcileTotals,
   evaluateSquareCommerceReconciliation,
@@ -27,6 +28,12 @@ function windowKey(window: SquareFarmWindow): string {
     return window.date;
   }
   return `${window.from}/${window.to}`;
+}
+
+function recoveryHasUncapturedProvenance(
+  recovery?: SquareCommerceWindowRecovery,
+): boolean {
+  return Boolean(recovery?.uncapturedProvenanceByPaymentId?.size);
 }
 
 function importSummary(): SquareCommerceImportSummary {
@@ -60,6 +67,8 @@ function normalizeSummary(): SquareCommerceNormalizeSummary {
     canceledCardVoidsSkipped: 0,
     openOrderCashReceipts: 0,
     openOrderCashReceiptAmount: 0,
+    uncapturedAuthorizedCardsSkipped: 0,
+    uncapturedAuthorizedCardAmount: 0,
   };
 }
 
@@ -349,6 +358,10 @@ function paymentDiscovery(missingOrders: number): PaymentOrderRecoveryDiscovery 
       { length: missingOrders },
       (_, index) => `ORDER-${index}`,
     ),
+    paymentIdsAwaitingOrder: Array.from(
+      { length: missingOrders },
+      (_, index) => `PAY-${index}`,
+    ),
     paymentAmountAwaitingDependency: missingOrders * 100,
   };
 }
@@ -392,6 +405,14 @@ type HealingOptions = {
   paymentPersist?: Partial<
     NonNullable<SquarePaymentOrderRecoveryResult["persist"]>
   >;
+  paymentRefresh?: {
+    paymentsRequested?: number;
+    paymentsReturned?: number;
+    paymentsMissing?: number;
+    snapshotsInserted?: number;
+    snapshotsUnchanged?: number;
+  };
+  paymentRefreshError?: Error;
 };
 
 function healingDeps(options: HealingOptions): {
@@ -404,16 +425,22 @@ function healingDeps(options: HealingOptions): {
   catalogNormalizes: number;
   paymentDiscovers: number;
   paymentRecovers: number;
+  paymentRefreshes: number;
+  normalizeWithProvenance: boolean[];
+  reconcileWithProvenance: boolean[];
 } {
   const imports: string[] = [];
   const normalizes: string[] = [];
   const reconciles: string[] = [];
+  const normalizeWithProvenance: boolean[] = [];
+  const reconcileWithProvenance: boolean[] = [];
   const counters = {
     catalogDiscovers: 0,
     catalogRecovers: 0,
     catalogNormalizes: 0,
     paymentDiscovers: 0,
     paymentRecovers: 0,
+    paymentRefreshes: 0,
   };
   const reconQueue = [...options.reconQueue];
   return {
@@ -435,17 +462,24 @@ function healingDeps(options: HealingOptions): {
     get paymentRecovers() {
       return counters.paymentRecovers;
     },
+    get paymentRefreshes() {
+      return counters.paymentRefreshes;
+    },
+    normalizeWithProvenance,
+    reconcileWithProvenance,
     deps: {
       async importWindow(window) {
         imports.push(windowKey(window));
         return importSummary();
       },
-      async normalizeWindow(window) {
+      async normalizeWindow(window, recovery) {
         normalizes.push(windowKey(window));
+        normalizeWithProvenance.push(recoveryHasUncapturedProvenance(recovery));
         return normalizeSummary();
       },
-      async reconcileWindow(window) {
+      async reconcileWindow(window, recovery) {
         reconciles.push(windowKey(window));
+        reconcileWithProvenance.push(recoveryHasUncapturedProvenance(recovery));
         const next = reconQueue.shift();
         if (!next) {
           throw new Error("unexpected extra reconcile");
@@ -487,6 +521,28 @@ function healingDeps(options: HealingOptions): {
           options.paymentPersist ?? {},
         );
       },
+      ...(options.paymentRefresh !== undefined || options.paymentRefreshError
+        ? {
+            async recoverPaymentRefresh(paymentIds: string[]) {
+              counters.paymentRefreshes += 1;
+              if (options.paymentRefreshError) {
+                throw options.paymentRefreshError;
+              }
+              const requested = paymentIds.length;
+              return {
+                paymentsRequested:
+                  options.paymentRefresh?.paymentsRequested ?? requested,
+                paymentsReturned:
+                  options.paymentRefresh?.paymentsReturned ?? requested,
+                paymentsMissing: options.paymentRefresh?.paymentsMissing ?? 0,
+                snapshotsInserted:
+                  options.paymentRefresh?.snapshotsInserted ?? requested,
+                snapshotsUnchanged:
+                  options.paymentRefresh?.snapshotsUnchanged ?? 0,
+              };
+            },
+          }
+        : {}),
     },
   };
 }
@@ -872,5 +928,275 @@ test("S. dry-run remains side-effect free for November-shaped payment gaps", asy
   assert.equal(recorded.paymentRecovers, 0);
   assert.equal(recorded.catalogRecovers, 0);
   assert.equal(recorded.normalizes.length, 0);
+});
+
+test("V. exact payment refresh runs at most once after missing orders", async () => {
+  const recorded = healingDeps({
+    reconQueue: [
+      verdictFrom({ canonicalPayments: 0 }),
+      verdictFrom({
+        sourcePayments: 2,
+        canonicalizableSourcePayments: 0,
+        uncapturedAuthorizedCards: 2,
+        canonicalPayments: 0,
+        sourcePaymentAmount: 0,
+        canonicalPaymentAmount: 0,
+        uncapturedAuthorizedCardAmount: 540,
+      }),
+    ],
+    paymentMissing: 2,
+    paymentPersist: {
+      ordersReturned: 0,
+      ordersMissing: 2,
+      snapshotsInserted: 0,
+    },
+    paymentRefresh: {},
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, true);
+  assert.equal(recorded.paymentRecovers, 1);
+  assert.equal(recorded.paymentRefreshes, 1);
+  assert.equal(recorded.normalizes.length, 2);
+  assert.deepEqual(recorded.normalizeWithProvenance, [false, true]);
+  assert.deepEqual(recorded.reconcileWithProvenance, [false, true]);
+});
+
+test("W. exact payment refresh is not called when order recovery succeeds", async () => {
+  const recorded = healingDeps({
+    reconQueue: [verdictFrom({ canonicalPayments: 0 }), verdictFrom()],
+    paymentMissing: 1,
+    paymentRefresh: {},
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, true);
+  assert.equal(recorded.paymentRecovers, 1);
+  assert.equal(recorded.paymentRefreshes, 0);
+  assert.deepEqual(recorded.normalizeWithProvenance, [false, false]);
+});
+
+test("X. FAILED/CANCELED CARD gaps do not retrieve payments", async () => {
+  const recorded = healingDeps({
+    reconQueue: [
+      verdictFrom({
+        sourcePayments: 2,
+        canonicalizableSourcePayments: 0,
+        failedNonSettledAttempts: 1,
+        canceledCardVoids: 1,
+        canonicalPayments: 0,
+        sourcePaymentAmount: 0,
+        canonicalPaymentAmount: 0,
+        failedAttemptRequestedAmount: 100,
+        canceledCardVoidRequestedAmount: 200,
+      }),
+    ],
+    paymentMissing: 0,
+    paymentRefresh: {},
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, true);
+  assert.equal(recorded.paymentRecovers, 0);
+  assert.equal(recorded.paymentRefreshes, 0);
+});
+
+test("L. RetrievePayment miss after missing orders FAILs closed", async () => {
+  const recorded = healingDeps({
+    reconQueue: [verdictFrom({ canonicalPayments: 0 })],
+    paymentMissing: 1,
+    paymentPersist: {
+      ordersReturned: 0,
+      ordersMissing: 1,
+      snapshotsInserted: 0,
+    },
+    paymentRefresh: {
+      paymentsRequested: 1,
+      paymentsReturned: 0,
+      paymentsMissing: 1,
+      snapshotsInserted: 0,
+    },
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  assert.equal(result.failedStep, "payment-refresh");
+  assert.equal(recorded.paymentRefreshes, 1);
+  assert.equal(recorded.normalizes.length, 1);
+  assert.deepEqual(recorded.normalizeWithProvenance, [false]);
+});
+
+test("AA. complete ListPayments evidence without recovery is not uncaptured PASS", async () => {
+  const recorded = healingDeps({
+    reconQueue: [
+      verdictFrom({
+        sourcePayments: 2,
+        canonicalizableSourcePayments: 2,
+        uncapturedAuthorizedCards: 0,
+        canonicalPayments: 0,
+        sourcePaymentAmount: 540,
+        canonicalPaymentAmount: 0,
+      }),
+    ],
+    paymentMissing: 2,
+    paymentPersist: {
+      ordersReturned: 0,
+      ordersMissing: 2,
+      snapshotsInserted: 0,
+    },
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  assert.equal(result.failedStep, "payment-order-recovery");
+  assert.equal(recorded.paymentRefreshes, 0);
+  assert.deepEqual(recorded.normalizeWithProvenance, [false]);
+  assert.deepEqual(recorded.reconcileWithProvenance, [false]);
+});
+
+test("AB. recovered order uses canonical path and does not GetPayment", async () => {
+  const recorded = healingDeps({
+    reconQueue: [
+      verdictFrom({ canonicalPayments: 0 }),
+      verdictFrom({
+        sourcePayments: 2,
+        canonicalizableSourcePayments: 2,
+        uncapturedAuthorizedCards: 0,
+        canonicalPayments: 2,
+        sourcePaymentAmount: 540,
+        canonicalPaymentAmount: 540,
+      }),
+    ],
+    paymentMissing: 2,
+    paymentRefresh: {},
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, true);
+  assert.equal(recorded.paymentRecovers, 1);
+  assert.equal(recorded.paymentRefreshes, 0);
+  assert.deepEqual(recorded.normalizeWithProvenance, [false, false]);
+});
+
+test("AC. missing order then GetPayment provenance can PASS as uncaptured", async () => {
+  const recorded = healingDeps({
+    reconQueue: [
+      verdictFrom({ canonicalPayments: 0 }),
+      verdictFrom({
+        sourcePayments: 2,
+        canonicalizableSourcePayments: 0,
+        uncapturedAuthorizedCards: 2,
+        canonicalPayments: 0,
+        sourcePaymentAmount: 0,
+        canonicalPaymentAmount: 0,
+        uncapturedAuthorizedCardAmount: 540,
+      }),
+    ],
+    paymentMissing: 2,
+    paymentPersist: {
+      ordersReturned: 0,
+      ordersMissing: 2,
+      snapshotsInserted: 0,
+    },
+    paymentRefresh: {},
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, true);
+  assert.equal(recorded.paymentRefreshes, 1);
+  assert.deepEqual(recorded.normalizeWithProvenance, [false, true]);
+  assert.deepEqual(recorded.reconcileWithProvenance, [false, true]);
+});
+
+test("AD. GetPayment COMPLETED after missing order remains FAIL", async () => {
+  const recorded = healingDeps({
+    reconQueue: [
+      verdictFrom({ canonicalPayments: 0 }),
+      verdictFrom({
+        sourcePayments: 2,
+        canonicalizableSourcePayments: 2,
+        uncapturedAuthorizedCards: 0,
+        canonicalPayments: 0,
+        sourcePaymentAmount: 540,
+        canonicalPaymentAmount: 0,
+      }),
+    ],
+    paymentMissing: 2,
+    paymentPersist: {
+      ordersReturned: 0,
+      ordersMissing: 2,
+      snapshotsInserted: 0,
+    },
+    paymentRefresh: {},
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  assert.equal(result.failedStep, "reconcile");
+  assert.equal(recorded.paymentRefreshes, 1);
+  assert.deepEqual(recorded.normalizeWithProvenance, [false, true]);
+});
+
+test("AE. GetPayment 404 after missing order FAILs without uncaptured provenance retry", async () => {
+  const recorded = healingDeps({
+    reconQueue: [verdictFrom({ canonicalPayments: 0 })],
+    paymentMissing: 1,
+    paymentPersist: {
+      ordersReturned: 0,
+      ordersMissing: 1,
+      snapshotsInserted: 0,
+    },
+    paymentRefresh: {
+      paymentsRequested: 1,
+      paymentsReturned: 0,
+      paymentsMissing: 1,
+      snapshotsInserted: 0,
+    },
+  });
+  const result = await runSquareCommerceBackfill(
+    recorded.deps,
+    MONTH,
+    () => undefined,
+  );
+  assert.equal(result.ok, false);
+  if (result.ok) {
+    return;
+  }
+  assert.equal(result.failedStep, "payment-refresh");
+  assert.equal(recorded.normalizes.length, 1);
+  assert.deepEqual(recorded.normalizeWithProvenance, [false]);
 });
 

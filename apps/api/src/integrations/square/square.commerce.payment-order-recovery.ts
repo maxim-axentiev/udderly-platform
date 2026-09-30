@@ -13,6 +13,7 @@ export type MissingPaymentOrderDependency = {
 export type PaymentOrderRecoveryDiscovery = {
   unresolvedPayments: number;
   distinctMissingOrderIds: string[];
+  paymentIdsAwaitingOrder: string[];
   paymentAmountAwaitingDependency: number;
 };
 
@@ -40,6 +41,7 @@ export function discoverMissingPaymentOrderDependencies(
   },
 ): PaymentOrderRecoveryDiscovery {
   const missingOrders = new Map<string, number>();
+  const paymentIdsAwaitingOrder: string[] = [];
   let unresolvedPayments = 0;
   let paymentAmountAwaitingDependency = 0;
 
@@ -62,6 +64,7 @@ export function discoverMissingPaymentOrderDependencies(
       continue;
     }
     unresolvedPayments += 1;
+    paymentIdsAwaitingOrder.push(payment.externalId);
     const amount = nonNegative(moneyAmount(payment.payload.amount_money));
     paymentAmountAwaitingDependency += amount;
     missingOrders.set(orderId, (missingOrders.get(orderId) ?? 0) + 1);
@@ -70,6 +73,7 @@ export function discoverMissingPaymentOrderDependencies(
   return {
     unresolvedPayments,
     distinctMissingOrderIds: [...missingOrders.keys()],
+    paymentIdsAwaitingOrder,
     paymentAmountAwaitingDependency,
   };
 }

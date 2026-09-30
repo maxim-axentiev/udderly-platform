@@ -3,9 +3,14 @@ import type { SquareCatalogRecoveryResult } from "./square-catalog-recovery.serv
 import type { SquareCommerceImportSummary } from "./square-commerce-import.service";
 import type { SquareCommerceNormalizeSummary } from "./square-commerce-normalize.service";
 import type { SquarePaymentOrderRecoveryResult } from "./square-payment-order-recovery.service";
+import type { SquarePaymentRefreshPersistSummary } from "./square-payment-refresh.service";
 import type { CatalogRecoveryDiscovery } from "./square.catalog.recovery";
 import type { PaymentOrderRecoveryDiscovery } from "./square.commerce.payment-order-recovery";
 import type { SquareCommerceReconcileVerdict } from "./square.commerce.reconcile";
+import {
+  uncapturedProvenanceAfterOrderMissAndPaymentRefresh,
+  type SquareCommerceWindowRecovery,
+} from "./square.commerce.payment-class";
 import type { SquareFarmWindow } from "./square.range";
 
 export type SquareCommerceBackfillChunk = { from: string; to: string };
@@ -21,7 +26,8 @@ export type SquareCommerceBackfillStep =
   | "normalize"
   | "reconcile"
   | "catalog-recovery"
-  | "payment-order-recovery";
+  | "payment-order-recovery"
+  | "payment-refresh";
 
 export type SquareCommerceBackfillResult =
   | {
@@ -46,9 +52,11 @@ export type SquareCommerceBackfillDeps = {
   ) => Promise<SquareCommerceImportSummary>;
   normalizeWindow: (
     window: SquareFarmWindow,
+    recovery?: SquareCommerceWindowRecovery,
   ) => Promise<SquareCommerceNormalizeSummary>;
   reconcileWindow: (
     window: SquareFarmWindow,
+    recovery?: SquareCommerceWindowRecovery,
   ) => Promise<SquareCommerceReconcileVerdict>;
   discoverCatalogWindow?: (
     window: SquareFarmWindow,
@@ -63,6 +71,9 @@ export type SquareCommerceBackfillDeps = {
   recoverPaymentOrderWindow?: (
     window: SquareFarmWindow,
   ) => Promise<SquarePaymentOrderRecoveryResult>;
+  recoverPaymentRefresh?: (
+    paymentIds: string[],
+  ) => Promise<SquarePaymentRefreshPersistSummary>;
 };
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
@@ -267,6 +278,7 @@ export async function runSquareCommerceBackfill(
 
     let catalogAttempted = false;
     let paymentAttempted = false;
+    let paymentRefreshAttempted = false;
 
     while (!verdict.passed) {
       const catalogEligible = shouldAttemptCatalogRecovery(
@@ -369,6 +381,61 @@ export async function runSquareCommerceBackfill(
         log("Automatic payment-order recovery");
         logPaymentOrderRecovery(recovered.discovery, recovered.persist, log);
         if (paymentOrderRecoveryCannotFulfill(recovered)) {
+          if (
+            !paymentRefreshAttempted &&
+            deps.recoverPaymentRefresh &&
+            recovered.discovery.paymentIdsAwaitingOrder.length > 0
+          ) {
+            paymentRefreshAttempted = true;
+            let refreshed: SquarePaymentRefreshPersistSummary;
+            try {
+              refreshed = await deps.recoverPaymentRefresh(
+                recovered.discovery.paymentIdsAwaitingOrder,
+              );
+            } catch (error) {
+              return fail(
+                chunks,
+                completed,
+                chunk,
+                "payment-refresh",
+                error,
+                log,
+              );
+            }
+            log("Automatic exact payment refresh");
+            logPaymentRefresh(refreshed, log);
+            if (paymentRefreshDidNotReturnAll(refreshed)) {
+              return fail(
+                chunks,
+                completed,
+                chunk,
+                "payment-refresh",
+                new Error(
+                  `exact payment refresh did not return every requested payment for ${chunk.from} to ${chunk.to}`,
+                ),
+                log,
+              );
+            }
+            const retriedAfterRefresh = await retryNormalizeReconcile(
+              deps,
+              window,
+              chunk,
+              chunks,
+              completed,
+              log,
+              {
+                uncapturedProvenanceByPaymentId:
+                  uncapturedProvenanceAfterOrderMissAndPaymentRefresh(
+                    recovered.discovery.paymentIdsAwaitingOrder,
+                  ),
+              },
+            );
+            if (!retriedAfterRefresh.ok) {
+              return retriedAfterRefresh.result;
+            }
+            verdict = retriedAfterRefresh.verdict;
+            continue;
+          }
           return fail(
             chunks,
             completed,
@@ -426,12 +493,13 @@ async function retryNormalizeReconcile(
   chunks: SquareCommerceBackfillChunk[],
   completed: number,
   log: (line: string) => void,
+  recovery?: SquareCommerceWindowRecovery,
 ): Promise<
   | { ok: true; verdict: SquareCommerceReconcileVerdict }
   | { ok: false; result: SquareCommerceBackfillResult }
 > {
   try {
-    const normalized = await deps.normalizeWindow(window);
+    const normalized = await deps.normalizeWindow(window, recovery);
     log("Retry normalize");
     logNormalize(normalized, log);
   } catch (error) {
@@ -441,7 +509,7 @@ async function retryNormalizeReconcile(
     };
   }
   try {
-    const verdict = await deps.reconcileWindow(window);
+    const verdict = await deps.reconcileWindow(window, recovery);
     log("Retry reconcile");
     logReconcile(verdict, log);
     return { ok: true, verdict };
@@ -488,6 +556,12 @@ function logNormalize(
   log(`Open-order cash receipts: ${normalized.openOrderCashReceipts}`);
   log(
     `Open-order cash receipt amount: ${normalized.openOrderCashReceiptAmount}`,
+  );
+  log(
+    `Uncaptured authorized cards skipped: ${normalized.uncapturedAuthorizedCardsSkipped}`,
+  );
+  log(
+    `Uncaptured authorized card amount: ${normalized.uncapturedAuthorizedCardAmount}`,
   );
   log(`Dependency orders applied: ${normalized.dependencyOrdersApplied}`);
   log(`Unresolved refunds: ${normalized.unresolvedRefunds}`);
@@ -555,6 +629,28 @@ function logPaymentOrderRecovery(
     log(`Snapshots unchanged: ${persist.snapshotsUnchanged}`);
   }
   log("");
+}
+
+function logPaymentRefresh(
+  persist: SquarePaymentRefreshPersistSummary,
+  log: (line: string) => void,
+): void {
+  log(`Payments requested: ${persist.paymentsRequested}`);
+  log(`Payments returned: ${persist.paymentsReturned}`);
+  log(`Payments missing: ${persist.paymentsMissing}`);
+  log(`Snapshots inserted: ${persist.snapshotsInserted}`);
+  log(`Snapshots unchanged: ${persist.snapshotsUnchanged}`);
+  log("");
+}
+
+function paymentRefreshDidNotReturnAll(
+  persist: SquarePaymentRefreshPersistSummary,
+): boolean {
+  return (
+    persist.paymentsRequested > 0 &&
+    (persist.paymentsMissing > 0 ||
+      persist.paymentsReturned !== persist.paymentsRequested)
+  );
 }
 
 function fail(

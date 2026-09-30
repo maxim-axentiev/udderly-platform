@@ -14,6 +14,8 @@ import {
   classifySquareSourcePayment,
   failedAttemptRequestedAmount,
   openOrderCashReceiptAmount,
+  uncapturedAuthorizedCardAmount,
+  type SquareCommerceWindowRecovery,
 } from "./square.commerce.payment-class";
 import {
   emptyReconcileTotals,
@@ -47,6 +49,7 @@ export class SquareCommerceReconcileService {
 
   async reconcileWindow(
     window: SquareFarmWindow,
+    recovery?: SquareCommerceWindowRecovery,
   ): Promise<SquareCommerceReconcileVerdict> {
     const range = squareFarmUtcRange(window);
     const [orderRows, paymentRows, refundRows] = await Promise.all([
@@ -158,6 +161,9 @@ export class SquareCommerceReconcileService {
               (sibling) => stringValue(sibling.id) !== snapshot.externalId,
             )
           : [],
+        uncapturedRecovery: recovery?.uncapturedProvenanceByPaymentId?.get(
+          snapshot.externalId,
+        ),
       });
       if (paymentClass === "failed_non_settled_attempt") {
         totals.failedNonSettledAttempts += 1;
@@ -176,6 +182,13 @@ export class SquareCommerceReconcileService {
       if (paymentClass === "open_order_cash_receipt") {
         totals.openOrderCashReceipts += 1;
         totals.openOrderCashReceiptAmount += openOrderCashReceiptAmount(
+          snapshot.payload,
+        );
+        continue;
+      }
+      if (paymentClass === "uncaptured_authorized_card") {
+        totals.uncapturedAuthorizedCards += 1;
+        totals.uncapturedAuthorizedCardAmount += uncapturedAuthorizedCardAmount(
           snapshot.payload,
         );
         continue;

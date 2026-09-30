@@ -175,6 +175,51 @@ test("E. BatchRetrieveOrders batches more than 100 ids safely", async () => {
   }
 });
 
+test("RetrievePayment GETs one payment id and returns the payment object", async () => {
+  const originalFetch = globalThis.fetch;
+  let pathname = "";
+  let method = "";
+  let squareVersion = "";
+
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = new URL(String(input));
+    pathname = url.pathname;
+    method = String(init?.method ?? "GET");
+    const headers = new Headers(init?.headers);
+    squareVersion = headers.get("Square-Version") ?? "";
+    return jsonResponse({
+      payment: { id: "5MS5EraCLtij64NFrvFJESKKuaB", status: "APPROVED" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const payment = await client().retrievePayment("5MS5EraCLtij64NFrvFJESKKuaB");
+    assert.equal(method, "GET");
+    assert.equal(pathname, "/v2/payments/5MS5EraCLtij64NFrvFJESKKuaB");
+    assert.equal(squareVersion, "2026-08-19");
+    assert.equal(payment?.id, "5MS5EraCLtij64NFrvFJESKKuaB");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("L. RetrievePayment 404 is missing, not a mutation", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => {
+    return new Response(JSON.stringify({ errors: [{ code: "NOT_FOUND" }] }), {
+      status: 404,
+      headers: { "Content-Type": "application/json" },
+    });
+  }) as typeof fetch;
+
+  try {
+    const payment = await client().retrievePayment("missing-pay");
+    assert.equal(payment, undefined);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 function client(): SquareClient {
   return new SquareClient({
     accessToken: "synthetic-token",

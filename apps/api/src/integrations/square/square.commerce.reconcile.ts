@@ -27,12 +27,14 @@ export type SquareCommerceReconcileTotals = {
   failedNonSettledAttempts: number;
   canceledCardVoids: number;
   openOrderCashReceipts: number;
+  uncapturedAuthorizedCards: number;
   canonicalPayments: number;
   sourcePaymentAmount: number;
   canonicalPaymentAmount: number;
   failedAttemptRequestedAmount: number;
   canceledCardVoidRequestedAmount: number;
   openOrderCashReceiptAmount: number;
+  uncapturedAuthorizedCardAmount: number;
   sourceTips: number;
   canonicalTips: number;
   sourceProcessingFees: number;
@@ -74,10 +76,11 @@ export function evaluateSquareCommerceReconciliation(
     totals.canonicalizableSourcePayments +
       totals.failedNonSettledAttempts +
       totals.canceledCardVoids +
-      totals.openOrderCashReceipts
+      totals.openOrderCashReceipts +
+      totals.uncapturedAuthorizedCards
   ) {
     differences.push(
-      `Payment records: source ${totals.sourcePayments}, canonicalizable ${totals.canonicalizableSourcePayments}, failed non-settled ${totals.failedNonSettledAttempts}, canceled card voids ${totals.canceledCardVoids}, open-order cash receipts ${totals.openOrderCashReceipts}`,
+      `Payment records: source ${totals.sourcePayments}, canonicalizable ${totals.canonicalizableSourcePayments}, failed non-settled ${totals.failedNonSettledAttempts}, canceled card voids ${totals.canceledCardVoids}, open-order cash receipts ${totals.openOrderCashReceipts}, uncaptured authorized cards ${totals.uncapturedAuthorizedCards}`,
     );
   }
   if (totals.canonicalizableSourcePayments !== totals.canonicalPayments) {
@@ -176,12 +179,14 @@ export function formatSquareCommerceReconcile(
     `Failed non-settled card attempts: ${t.failedNonSettledAttempts}`,
     `Canceled card voids: ${t.canceledCardVoids}`,
     `Open-order cash receipts: ${t.openOrderCashReceipts}`,
+    `Uncaptured authorized cards: ${t.uncapturedAuthorizedCards}`,
     `Canonical payments: ${t.canonicalPayments}`,
     `Source canonical payment amount: ${t.sourcePaymentAmount}`,
     `Canonical payment amount: ${t.canonicalPaymentAmount}`,
     `Failed attempt requested amount: ${t.failedAttemptRequestedAmount}`,
     `Canceled card void requested amount: ${t.canceledCardVoidRequestedAmount}`,
     `Open-order cash receipt amount: ${t.openOrderCashReceiptAmount}`,
+    `Uncaptured authorized card amount: ${t.uncapturedAuthorizedCardAmount}`,
     `Source tips: ${t.sourceTips}`,
     `Canonical tips: ${t.canonicalTips}`,
     `Source processing fees: ${t.sourceProcessingFees}`,
@@ -235,12 +240,14 @@ export function emptyReconcileTotals(
     failedNonSettledAttempts: 0,
     canceledCardVoids: 0,
     openOrderCashReceipts: 0,
+    uncapturedAuthorizedCards: 0,
     canonicalPayments: 0,
     sourcePaymentAmount: 0,
     canonicalPaymentAmount: 0,
     failedAttemptRequestedAmount: 0,
     canceledCardVoidRequestedAmount: 0,
     openOrderCashReceiptAmount: 0,
+    uncapturedAuthorizedCardAmount: 0,
     sourceTips: 0,
     canonicalTips: 0,
     sourceProcessingFees: 0,

@@ -50,6 +50,12 @@ async function main(): Promise<void> {
     console.log(
       `Open-order cash receipt amount: ${result.openOrderCashReceiptAmount}`,
     );
+    console.log(
+      `Uncaptured authorized cards skipped: ${result.uncapturedAuthorizedCardsSkipped}`,
+    );
+    console.log(
+      `Uncaptured authorized card amount: ${result.uncapturedAuthorizedCardAmount}`,
+    );
     console.log(`Unresolved refunds: ${result.unresolvedRefunds}`);
     console.log(`Dependency orders applied: ${result.dependencyOrdersApplied}`);
     console.log(

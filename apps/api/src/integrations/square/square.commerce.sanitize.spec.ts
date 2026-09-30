@@ -9,6 +9,7 @@ import {
   sanitizeSquarePayment,
   sanitizeSquareRefund,
 } from "./square.commerce.sanitize";
+import { hashCanonicalJson } from "./square.hash";
 import { squarePaymentMethod } from "./square.commerce.status";
 
 test("sale total excludes explicit Square tip once", () => {
@@ -305,30 +306,74 @@ test("sanitizes order without customer contact or notes", () => {
   ]);
 });
 
-test("sanitizes payment without card, fingerprint, or receipt URL", () => {
+test("sanitizes payment settlement-state fields and excludes card/customer secrets", () => {
   const sanitized = sanitizeSquarePayment({
     id: "P1",
     order_id: "O1",
-    status: "COMPLETED",
+    status: "APPROVED",
     source_type: "CARD",
-    amount_money: { amount: 400, currency: "CAD" },
-    tip_money: { amount: 100, currency: "CAD" },
+    created_at: "2023-11-18T18:52:11.113Z",
+    delay_duration: "PT36H",
+    delay_action: "CANCEL",
+    delayed_until: "2023-11-20T06:52:11.113Z",
+    amount_money: { amount: 270, currency: "CAD" },
+    approved_money: { amount: 270, currency: "CAD" },
+    total_money: { amount: 270, currency: "CAD" },
     processing_fee: [
       { type: "INITIAL", amount_money: { amount: 30, currency: "CAD" } },
     ],
-    card_details: { fingerprint: "secret", card: { last_4: "1111" } },
+    card_details: {
+      status: "AUTHORIZED",
+      entry_method: "CONTACTLESS",
+      fingerprint: "secret-fingerprint",
+      cvv_status: "CVV_NOT_CHECKED",
+      avs_status: "AVS_NOT_CHECKED",
+      card: { last_4: "1111", card_brand: "VISA", exp_month: 12, exp_year: 2026 },
+      card_payment_timeline: {
+        authorized_at: "2023-11-18T18:52:11.340Z",
+        captured_at: "2023-11-18T18:52:12.000Z",
+        voided_at: "2023-11-18T18:52:13.000Z",
+      },
+    },
     receipt_url: "https://example.invalid/receipt",
     buyer_email_address: "x@example.invalid",
     billing_address: { address_line_1: "1 Main" },
+    customer_id: "C1",
   });
   assert.equal(sanitized?.processing_fee_amount, 30);
-  const fees = sanitized?.processing_fee as Record<string, unknown>[];
-  assert.equal(fees[0]?.type, "INITIAL");
-  assert.deepEqual(fees[0]?.amount_money, { amount: 30, currency: "CAD" });
-  assert.equal("card_details" in (sanitized ?? {}), false);
+  assert.equal(sanitized?.delay_duration, "PT36H");
+  assert.equal(sanitized?.delay_action, "CANCEL");
+  assert.equal(sanitized?.delayed_until, "2023-11-20T06:52:11.113Z");
+  assert.deepEqual(sanitized?.card_details, {
+    status: "AUTHORIZED",
+    entry_method: "CONTACTLESS",
+    card_payment_timeline: {
+      authorized_at: "2023-11-18T18:52:11.340Z",
+      captured_at: "2023-11-18T18:52:12.000Z",
+      voided_at: "2023-11-18T18:52:13.000Z",
+    },
+  });
+  const serialized = JSON.stringify(sanitized);
+  assert.equal(serialized.includes("secret-fingerprint"), false);
+  assert.equal(serialized.includes("1111"), false);
+  assert.equal(serialized.includes("VISA"), false);
   assert.equal("receipt_url" in (sanitized ?? {}), false);
   assert.equal("buyer_email_address" in (sanitized ?? {}), false);
   assert.equal("billing_address" in (sanitized ?? {}), false);
+  assert.equal(sanitized?.customer_id, "C1");
+});
+
+test("identical sanitized payment payloads share a hash for snapshot dedupe", () => {
+  const payload = {
+    id: "P-DEDUP",
+    status: "APPROVED",
+    source_type: "CARD",
+    amount_money: { amount: 270, currency: "CAD" },
+    card_details: { status: "AUTHORIZED" },
+  };
+  const first = sanitizeSquarePayment(payload);
+  const second = sanitizeSquarePayment(payload);
+  assert.equal(hashCanonicalJson(first), hashCanonicalJson(second));
 });
 
 test("sanitizes refund without reason text", () => {

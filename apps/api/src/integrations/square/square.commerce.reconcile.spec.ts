@@ -212,6 +212,32 @@ test("Q. unknown payment outside recognized classes still FAILs", () => {
   assert.match(verdict.differences.join("\n"), /Payment counts/);
 });
 
+test("Y. November 2023 uncaptured authorized decomposition is PASS", () => {
+  const verdict = evaluateSquareCommerceReconciliation(
+    totals({
+      sourcePayments: 160,
+      canonicalizableSourcePayments: 155,
+      failedNonSettledAttempts: 0,
+      canceledCardVoids: 3,
+      openOrderCashReceipts: 0,
+      uncapturedAuthorizedCards: 2,
+      canonicalPayments: 155,
+      sourcePaymentAmount: 452370,
+      canonicalPaymentAmount: 452370,
+      canceledCardVoidRequestedAmount: 19909,
+      uncapturedAuthorizedCardAmount: 540,
+    }),
+  );
+  assert.equal(verdict.passed, true);
+  const report = formatSquareCommerceReconcile(verdict);
+  assert.match(report, /Source payment records: 160/);
+  assert.match(report, /Canonical payments: 155/);
+  assert.match(report, /Canceled card voids: 3/);
+  assert.match(report, /Uncaptured authorized cards: 2/);
+  assert.match(report, /Uncaptured authorized card amount: 540/);
+  assert.match(report, /Canonical payment amount: 452370/);
+});
+
 test("open-order cash receipt amount is reported and excluded from canonical payment amount", () => {
   const verdict = evaluateSquareCommerceReconciliation(
     totals({

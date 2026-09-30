@@ -10,6 +10,10 @@ import {
 } from "./square.constants";
 import { SquareCommerceNormalizer } from "./square-commerce-normalizer";
 import {
+  uncapturedAuthorizedCardAmount,
+  type SquareCommerceWindowRecovery,
+} from "./square.commerce.payment-class";
+import {
   pickLatestSnapshots,
   type SquareSnapshotRow,
 } from "./square.commerce.snapshots";
@@ -37,6 +41,8 @@ export type SquareCommerceNormalizeSummary = {
   canceledCardVoidsSkipped: number;
   openOrderCashReceipts: number;
   openOrderCashReceiptAmount: number;
+  uncapturedAuthorizedCardsSkipped: number;
+  uncapturedAuthorizedCardAmount: number;
 };
 
 @Injectable()
@@ -47,14 +53,18 @@ export class SquareCommerceNormalizeService {
     private readonly normalizer: SquareCommerceNormalizer,
   ) {}
 
-  async applySnapshot(snapshotId: string) {
+  async applySnapshot(
+    snapshotId: string,
+    recovery?: SquareCommerceWindowRecovery,
+  ) {
     return this.database.db.transaction(async (tx) => {
-      return this.normalizer.applySnapshot(tx, snapshotId);
+      return this.normalizer.applySnapshot(tx, snapshotId, recovery);
     });
   }
 
   async normalizeWindow(
     window: SquareFarmWindow,
+    recovery?: SquareCommerceWindowRecovery,
   ): Promise<SquareCommerceNormalizeSummary> {
     const range = squareFarmUtcRange(window);
     const orders = await this.latestInRange(SQUARE_ORDER_ENTITY, range);
@@ -80,11 +90,13 @@ export class SquareCommerceNormalizeService {
       canceledCardVoidsSkipped: 0,
       openOrderCashReceipts: 0,
       openOrderCashReceiptAmount: 0,
+      uncapturedAuthorizedCardsSkipped: 0,
+      uncapturedAuthorizedCardAmount: 0,
     };
 
     for (const snapshot of orders) {
       const result = await this.database.db.transaction(async (tx) => {
-        return this.normalizer.applySnapshot(tx, snapshot.id);
+        return this.normalizer.applySnapshot(tx, snapshot.id, recovery);
       });
       if (result.outcome === "applied" && result.kind === "sale") {
         summary.sales += 1;
@@ -104,7 +116,7 @@ export class SquareCommerceNormalizeService {
 
     for (const snapshot of payments) {
       const result = await this.database.db.transaction(async (tx) => {
-        return this.normalizer.applySnapshot(tx, snapshot.id);
+        return this.normalizer.applySnapshot(tx, snapshot.id, recovery);
       });
       if (result.outcome === "applied" && result.kind === "payment") {
         summary.payments += 1;
@@ -123,6 +135,11 @@ export class SquareCommerceNormalizeService {
       } else if (result.outcome === "skipped_open_order_cash_receipt") {
         summary.openOrderCashReceipts += 1;
         summary.openOrderCashReceiptAmount += result.amount;
+      } else if (result.outcome === "skipped_uncaptured_authorized_card") {
+        summary.uncapturedAuthorizedCardsSkipped += 1;
+        summary.uncapturedAuthorizedCardAmount += uncapturedAuthorizedCardAmount(
+          snapshot.payload,
+        );
       } else if (result.outcome === "unresolved_payment") {
         summary.unresolvedPayments += 1;
       } else if (result.outcome === "skipped_stale") {
@@ -132,7 +149,7 @@ export class SquareCommerceNormalizeService {
 
     for (const snapshot of refunds) {
       const result = await this.database.db.transaction(async (tx) => {
-        return this.normalizer.applySnapshot(tx, snapshot.id);
+        return this.normalizer.applySnapshot(tx, snapshot.id, recovery);
       });
       if (result.outcome === "applied" && result.kind === "refund") {
         summary.refunds += 1;

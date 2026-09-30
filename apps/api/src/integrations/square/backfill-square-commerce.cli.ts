@@ -7,6 +7,7 @@ import { SquareCommerceImportService } from "./square-commerce-import.service";
 import { SquareCommerceNormalizeService } from "./square-commerce-normalize.service";
 import { SquareCommerceReconcileService } from "./square-commerce-reconcile.service";
 import { SquarePaymentOrderRecoveryService } from "./square-payment-order-recovery.service";
+import { SquarePaymentRefreshService } from "./square-payment-refresh.service";
 import {
   parseSquareCommerceBackfillArgs,
   runSquareCommerceBackfill,
@@ -47,11 +48,14 @@ async function main(): Promise<void> {
     const catalogRecovery = app.get(SquareCatalogRecoveryService);
     const catalogNormalizer = app.get(SquareCatalogNormalizeService);
     const paymentOrderRecovery = app.get(SquarePaymentOrderRecoveryService);
+    const paymentRefresh = app.get(SquarePaymentRefreshService);
     const result = await runSquareCommerceBackfill(
       {
         importWindow: (window) => importer.importWindow(window),
-        normalizeWindow: (window) => normalizer.normalizeWindow(window),
-        reconcileWindow: (window) => reconcilor.reconcileWindow(window),
+        normalizeWindow: (window, recovery) =>
+          normalizer.normalizeWindow(window, recovery),
+        reconcileWindow: (window, recovery) =>
+          reconcilor.reconcileWindow(window, recovery),
         discoverCatalogWindow: (window) => catalogRecovery.discoverWindow(window),
         recoverCatalogWindow: (window) => catalogRecovery.recoverWindow(window),
         normalizeCatalogLatest: () => catalogNormalizer.normalizeLatest(),
@@ -59,6 +63,8 @@ async function main(): Promise<void> {
           paymentOrderRecovery.discoverWindow(window),
         recoverPaymentOrderWindow: (window) =>
           paymentOrderRecovery.recoverWindow(window),
+        recoverPaymentRefresh: (paymentIds) =>
+          paymentRefresh.recoverExactPayments(paymentIds),
       },
       plan,
       console.log,
@@ -84,6 +90,7 @@ function unusedDeps(): SquareCommerceBackfillDeps {
     normalizeCatalogLatest: refuse,
     discoverPaymentOrderWindow: refuse,
     recoverPaymentOrderWindow: refuse,
+    recoverPaymentRefresh: refuse,
   };
 }
 

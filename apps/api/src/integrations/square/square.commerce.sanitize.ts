@@ -89,11 +89,18 @@ export function sanitizeSquarePayment(
   copyString(payload, object, "updated_at");
   copyString(payload, object, "customer_id");
   copyString(payload, object, "source_type");
+  copyString(payload, object, "delay_duration");
+  copyString(payload, object, "delay_action");
+  copyString(payload, object, "delayed_until");
   copyMoney(payload, object, "amount_money");
   copyMoney(payload, object, "total_money");
   copyMoney(payload, object, "tip_money");
   copyMoney(payload, object, "refunded_money");
   copyMoney(payload, object, "approved_money");
+  const cardDetails = sanitizeCardPaymentDetails(object.card_details);
+  if (cardDetails) {
+    payload.card_details = cardDetails;
+  }
 
   const fees = sanitizeProcessingFees(object.processing_fee);
   if (fees.length > 0) {
@@ -211,6 +218,29 @@ function copyOrderMoneyAmounts(
   if (Object.keys(amounts).length > 0) {
     target[key] = amounts;
   }
+}
+
+function sanitizeCardPaymentDetails(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  const details = nestedObject(value);
+  if (!details) {
+    return undefined;
+  }
+  const payload: Record<string, unknown> = {};
+  copyString(payload, details, "status");
+  copyString(payload, details, "entry_method");
+  const timeline = nestedObject(details.card_payment_timeline);
+  if (timeline) {
+    const sanitizedTimeline: Record<string, unknown> = {};
+    copyString(sanitizedTimeline, timeline, "authorized_at");
+    copyString(sanitizedTimeline, timeline, "captured_at");
+    copyString(sanitizedTimeline, timeline, "voided_at");
+    if (Object.keys(sanitizedTimeline).length > 0) {
+      payload.card_payment_timeline = sanitizedTimeline;
+    }
+  }
+  return Object.keys(payload).length > 0 ? payload : undefined;
 }
 
 function sanitizeTender(value: unknown): Record<string, unknown> | undefined {

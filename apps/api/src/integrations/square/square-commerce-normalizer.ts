@@ -10,7 +10,10 @@ import {
 } from "../../database/schema/commerce";
 import { sourceIdentities } from "../../database/schema/source-identity";
 import { sourceSnapshots } from "../../database/schema/source-snapshots";
-import { classifySquareSourcePayment } from "./square.commerce.payment-class";
+import {
+  classifySquareSourcePayment,
+  type SquareCommerceWindowRecovery,
+} from "./square.commerce.payment-class";
 import { squareOrderEligibleAsHistoricalSale } from "./square.commerce.order";
 import { orderLineExternalId } from "./square.commerce.line";
 import {
@@ -71,6 +74,7 @@ export type SquareCommerceApplyResult =
       outcome: "skipped_open_order_cash_receipt";
       amount: number;
     }
+  | { outcome: "skipped_uncaptured_authorized_card" }
   | { outcome: "unresolved_payment" }
   | { outcome: "unresolved_refund" }
   | { outcome: "skipped"; reason: "invalid_payload" | "not_found" };
@@ -80,6 +84,7 @@ export class SquareCommerceNormalizer {
   async applySnapshot(
     db: SquareCommerceDb,
     snapshotId: string,
+    recovery?: SquareCommerceWindowRecovery,
   ): Promise<SquareCommerceApplyResult> {
     const [snapshot] = await db
       .select({
@@ -108,7 +113,7 @@ export class SquareCommerceNormalizer {
       return this.applyOrder(db, snapshot);
     }
     if (snapshot.entityType === SQUARE_PAYMENT_ENTITY) {
-      return this.applyPayment(db, snapshot);
+      return this.applyPayment(db, snapshot, recovery);
     }
     if (snapshot.entityType === SQUARE_REFUND_ENTITY) {
       return this.applyRefund(db, snapshot);
@@ -417,6 +422,7 @@ export class SquareCommerceNormalizer {
   private async applyPayment(
     db: SquareCommerceDb,
     snapshot: { externalId: string; payload: Record<string, unknown> },
+    recovery?: SquareCommerceWindowRecovery,
   ): Promise<SquareCommerceApplyResult> {
     const existingPaymentId = await this.findResolved(
       db,
@@ -475,6 +481,18 @@ export class SquareCommerceNormalizer {
       );
     }
     if (!saleId) {
+      const uncaptured = classifySquareSourcePayment(snapshot.payload, {
+        saleResolved: Boolean(existingSaleId),
+        paymentResolved: Boolean(existingPaymentId),
+        orderPayload: latestOrder?.payload,
+        siblingPayments,
+        uncapturedRecovery: recovery?.uncapturedProvenanceByPaymentId?.get(
+          snapshot.externalId,
+        ),
+      });
+      if (uncaptured === "uncaptured_authorized_card") {
+        return { outcome: "skipped_uncaptured_authorized_card" };
+      }
       return { outcome: "unresolved_payment" };
     }
 
