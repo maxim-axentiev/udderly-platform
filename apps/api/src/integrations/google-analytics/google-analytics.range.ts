@@ -55,6 +55,21 @@ export function addCalendarDays(date: string, days: number): string {
     .slice(0, 10);
 }
 
+export function farmDatesInclusive(from: string, to: string): string[] {
+  assertGaDate(from);
+  assertGaDate(to);
+  if (from > to) {
+    throw new Error("invalid_date");
+  }
+  const dates: string[] = [];
+  let cursor = from;
+  while (cursor <= to) {
+    dates.push(cursor);
+    cursor = addCalendarDays(cursor, 1);
+  }
+  return dates;
+}
+
 export function compareDate(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }

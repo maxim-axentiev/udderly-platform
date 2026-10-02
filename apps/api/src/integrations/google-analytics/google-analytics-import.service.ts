@@ -1,5 +1,5 @@
 import { Injectable } from "@nestjs/common";
-import { and, eq, gte, lte } from "drizzle-orm";
+import { and, eq, gte, inArray, lte } from "drizzle-orm";
 import type { AppDatabase } from "../../database/database.service";
 import { DatabaseService } from "../../database/database.service";
 import { EnvService } from "../../config/env.service";
@@ -35,10 +35,13 @@ import {
 import { hashCanonicalJson } from "./google-analytics.hash";
 import { gaAdminExternalId, gaScopedExternalId } from "./google-analytics.identity";
 import {
-  DAILY_COMPONENT_SNAPSHOT_FIELD,
   isGaDailyComponentId,
   type GaDailyComponentId,
 } from "./google-analytics.daily";
+import {
+  planDailyComponentReplacement,
+  planDimensionalReplacement,
+} from "./google-analytics.replace";
 import {
   normalizeReportPayload,
   type NormalizedFact,
@@ -72,7 +75,7 @@ import type { GoogleAnalyticsJson } from "./google-analytics.types";
 
 export type GoogleAnalyticsImportDb = Pick<
   AppDatabase,
-  "select" | "insert" | "update" | "execute"
+  "select" | "insert" | "update" | "delete" | "execute" | "transaction"
 >;
 
 export type GaImportWindowResult = {
@@ -374,7 +377,7 @@ export class GoogleAnalyticsImportService {
       );
       const qualityError = qualityFailure(report.quality);
       if (qualityError) {
-        throw new Error(qualityError);
+        throw new Error(`${qualityError} family=${definition.id}`);
       }
       const snapshot = sanitizeReportSnapshot(report);
       assertNoSecrets(snapshot);
@@ -392,34 +395,92 @@ export class GoogleAnalyticsImportService {
       const facts = normalizeReportPayload(snapshot);
       factsByFamily[definition.id] = facts;
 
-      if (isGaDailyComponentId(definition.id)) {
-        await this.persistDailyComponent(
-          db,
-          propertyId,
-          snapshotId,
-          currency,
-          definition.id,
-          facts,
-          options.startDate,
-          options.endDate,
-        );
-      } else if (definition.canonicalFamily === "session_acquisition") {
-        await this.persistSessionAcquisition(db, propertyId, snapshotId, facts);
-      } else if (definition.canonicalFamily === "first_user_acquisition") {
-        await this.persistFirstUser(db, propertyId, snapshotId, facts);
-      } else if (definition.canonicalFamily === "landing_page") {
-        await this.persistLanding(db, propertyId, snapshotId, facts);
-      } else if (definition.canonicalFamily === "page_path") {
-        await this.persistPagePath(db, propertyId, snapshotId, facts);
-      } else if (definition.canonicalFamily === "event") {
-        await this.persistEvents(db, propertyId, snapshotId, facts);
-      } else if (definition.canonicalFamily === "country") {
-        await this.persistCountry(db, propertyId, snapshotId, facts);
-      } else if (definition.canonicalFamily === "device") {
-        await this.persistDevice(db, propertyId, snapshotId, facts);
-      } else if (definition.canonicalFamily === "ecommerce_item") {
-        await this.persistItems(db, propertyId, snapshotId, facts);
-      }
+      await db.transaction(async (tx) => {
+        if (isGaDailyComponentId(definition.id)) {
+          await this.persistDailyComponent(
+            tx,
+            propertyId,
+            snapshotId,
+            currency,
+            definition.id,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        } else if (definition.canonicalFamily === "session_acquisition") {
+          await this.persistSessionAcquisition(
+            tx,
+            propertyId,
+            snapshotId,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        } else if (definition.canonicalFamily === "first_user_acquisition") {
+          await this.persistFirstUser(
+            tx,
+            propertyId,
+            snapshotId,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        } else if (definition.canonicalFamily === "landing_page") {
+          await this.persistLanding(
+            tx,
+            propertyId,
+            snapshotId,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        } else if (definition.canonicalFamily === "page_path") {
+          await this.persistPagePath(
+            tx,
+            propertyId,
+            snapshotId,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        } else if (definition.canonicalFamily === "event") {
+          await this.persistEvents(
+            tx,
+            propertyId,
+            snapshotId,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        } else if (definition.canonicalFamily === "country") {
+          await this.persistCountry(
+            tx,
+            propertyId,
+            snapshotId,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        } else if (definition.canonicalFamily === "device") {
+          await this.persistDevice(
+            tx,
+            propertyId,
+            snapshotId,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        } else if (definition.canonicalFamily === "ecommerce_item") {
+          await this.persistItems(
+            tx,
+            propertyId,
+            snapshotId,
+            facts,
+            options.startDate,
+            options.endDate,
+          );
+        }
+      });
 
       results.push({
         family: definition.id,
@@ -522,7 +583,7 @@ export class GoogleAnalyticsImportService {
   }
 
   private async persistDailyComponent(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "update">,
     propertyId: string,
     snapshotId: string,
     currencyCode: string | null,
@@ -531,6 +592,13 @@ export class GoogleAnalyticsImportService {
     startDate: string,
     endDate: string,
   ) {
+    const plan = planDailyComponentReplacement({
+      component,
+      propertyId,
+      from: startDate,
+      to: endDate,
+      incomingFarmDates: facts.map((fact) => fact.farmDate),
+    });
     for (const fact of facts) {
       const owned = dailyOwnedValues(component, fact.metrics, snapshotId, currencyCode);
       await db
@@ -551,31 +619,61 @@ export class GoogleAnalyticsImportService {
           },
         });
     }
-    const snapshotField = DAILY_COMPONENT_SNAPSHOT_FIELD[component];
-    const stamp =
-      snapshotField === "siteTotalsSnapshotId"
-        ? { siteTotalsSnapshotId: snapshotId, updatedAt: new Date() }
-        : snapshotField === "engagementSnapshotId"
-          ? { engagementSnapshotId: snapshotId, updatedAt: new Date() }
-          : { ecommerceTotalsSnapshotId: snapshotId, updatedAt: new Date() };
+    if (plan.datesToClear.length === 0) {
+      return;
+    }
+    const cleared =
+      plan.snapshotField === "siteTotalsSnapshotId"
+        ? {
+            ...plan.nullOwnedMetrics,
+            siteTotalsSnapshotId: snapshotId,
+            updatedAt: new Date(),
+          }
+        : plan.snapshotField === "engagementSnapshotId"
+          ? {
+              ...plan.nullOwnedMetrics,
+              engagementSnapshotId: snapshotId,
+              updatedAt: new Date(),
+            }
+          : {
+              ...plan.nullOwnedMetrics,
+              ecommerceTotalsSnapshotId: snapshotId,
+              updatedAt: new Date(),
+            };
     await db
       .update(analyticsDailyTotals)
-      .set(stamp)
+      .set(cleared)
       .where(
         and(
           eq(analyticsDailyTotals.propertyExternalId, propertyId),
-          gte(analyticsDailyTotals.farmDate, startDate),
-          lte(analyticsDailyTotals.farmDate, endDate),
+          inArray(analyticsDailyTotals.farmDate, plan.datesToClear),
         ),
       );
   }
 
   private async persistSessionAcquisition(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "delete">,
     propertyId: string,
     sourceSnapshotId: string,
     facts: NormalizedFact[],
+    startDate: string,
+    endDate: string,
   ) {
+    const plan = planDimensionalReplacement({
+      family: "session_acquisition",
+      propertyId,
+      from: startDate,
+      to: endDate,
+    });
+    await db
+      .delete(analyticsSessionAcquisition)
+      .where(
+        and(
+          eq(analyticsSessionAcquisition.propertyExternalId, plan.propertyId),
+          gte(analyticsSessionAcquisition.farmDate, plan.deleteFrom),
+          lte(analyticsSessionAcquisition.farmDate, plan.deleteTo),
+        ),
+      );
     for (const fact of facts) {
       await db
         .insert(analyticsSessionAcquisition)
@@ -612,11 +710,28 @@ export class GoogleAnalyticsImportService {
   }
 
   private async persistFirstUser(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "delete">,
     propertyId: string,
     sourceSnapshotId: string,
     facts: NormalizedFact[],
+    startDate: string,
+    endDate: string,
   ) {
+    const plan = planDimensionalReplacement({
+      family: "first_user_acquisition",
+      propertyId,
+      from: startDate,
+      to: endDate,
+    });
+    await db
+      .delete(analyticsFirstUserAcquisition)
+      .where(
+        and(
+          eq(analyticsFirstUserAcquisition.propertyExternalId, plan.propertyId),
+          gte(analyticsFirstUserAcquisition.farmDate, plan.deleteFrom),
+          lte(analyticsFirstUserAcquisition.farmDate, plan.deleteTo),
+        ),
+      );
     for (const fact of facts) {
       await db
         .insert(analyticsFirstUserAcquisition)
@@ -650,11 +765,28 @@ export class GoogleAnalyticsImportService {
   }
 
   private async persistLanding(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "delete">,
     propertyId: string,
     sourceSnapshotId: string,
     facts: NormalizedFact[],
+    startDate: string,
+    endDate: string,
   ) {
+    const plan = planDimensionalReplacement({
+      family: "landing_page",
+      propertyId,
+      from: startDate,
+      to: endDate,
+    });
+    await db
+      .delete(analyticsLandingPages)
+      .where(
+        and(
+          eq(analyticsLandingPages.propertyExternalId, plan.propertyId),
+          gte(analyticsLandingPages.farmDate, plan.deleteFrom),
+          lte(analyticsLandingPages.farmDate, plan.deleteTo),
+        ),
+      );
     for (const fact of facts) {
       await db
         .insert(analyticsLandingPages)
@@ -687,11 +819,28 @@ export class GoogleAnalyticsImportService {
   }
 
   private async persistPagePath(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "delete">,
     propertyId: string,
     sourceSnapshotId: string,
     facts: NormalizedFact[],
+    startDate: string,
+    endDate: string,
   ) {
+    const plan = planDimensionalReplacement({
+      family: "page_path",
+      propertyId,
+      from: startDate,
+      to: endDate,
+    });
+    await db
+      .delete(analyticsPagePaths)
+      .where(
+        and(
+          eq(analyticsPagePaths.propertyExternalId, plan.propertyId),
+          gte(analyticsPagePaths.farmDate, plan.deleteFrom),
+          lte(analyticsPagePaths.farmDate, plan.deleteTo),
+        ),
+      );
     for (const fact of facts) {
       await db
         .insert(analyticsPagePaths)
@@ -722,11 +871,28 @@ export class GoogleAnalyticsImportService {
   }
 
   private async persistEvents(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "delete">,
     propertyId: string,
     sourceSnapshotId: string,
     facts: NormalizedFact[],
+    startDate: string,
+    endDate: string,
   ) {
+    const plan = planDimensionalReplacement({
+      family: "event",
+      propertyId,
+      from: startDate,
+      to: endDate,
+    });
+    await db
+      .delete(analyticsEvents)
+      .where(
+        and(
+          eq(analyticsEvents.propertyExternalId, plan.propertyId),
+          gte(analyticsEvents.farmDate, plan.deleteFrom),
+          lte(analyticsEvents.farmDate, plan.deleteTo),
+        ),
+      );
     for (const fact of facts) {
       await db
         .insert(analyticsEvents)
@@ -757,11 +923,28 @@ export class GoogleAnalyticsImportService {
   }
 
   private async persistCountry(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "delete">,
     propertyId: string,
     sourceSnapshotId: string,
     facts: NormalizedFact[],
+    startDate: string,
+    endDate: string,
   ) {
+    const plan = planDimensionalReplacement({
+      family: "country",
+      propertyId,
+      from: startDate,
+      to: endDate,
+    });
+    await db
+      .delete(analyticsCountries)
+      .where(
+        and(
+          eq(analyticsCountries.propertyExternalId, plan.propertyId),
+          gte(analyticsCountries.farmDate, plan.deleteFrom),
+          lte(analyticsCountries.farmDate, plan.deleteTo),
+        ),
+      );
     for (const fact of facts) {
       await db
         .insert(analyticsCountries)
@@ -790,11 +973,28 @@ export class GoogleAnalyticsImportService {
   }
 
   private async persistDevice(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "delete">,
     propertyId: string,
     sourceSnapshotId: string,
     facts: NormalizedFact[],
+    startDate: string,
+    endDate: string,
   ) {
+    const plan = planDimensionalReplacement({
+      family: "device",
+      propertyId,
+      from: startDate,
+      to: endDate,
+    });
+    await db
+      .delete(analyticsDevices)
+      .where(
+        and(
+          eq(analyticsDevices.propertyExternalId, plan.propertyId),
+          gte(analyticsDevices.farmDate, plan.deleteFrom),
+          lte(analyticsDevices.farmDate, plan.deleteTo),
+        ),
+      );
     for (const fact of facts) {
       await db
         .insert(analyticsDevices)
@@ -825,11 +1025,28 @@ export class GoogleAnalyticsImportService {
   }
 
   private async persistItems(
-    db: GoogleAnalyticsImportDb,
+    db: Pick<AppDatabase, "insert" | "delete">,
     propertyId: string,
     sourceSnapshotId: string,
     facts: NormalizedFact[],
+    startDate: string,
+    endDate: string,
   ) {
+    const plan = planDimensionalReplacement({
+      family: "ecommerce_item",
+      propertyId,
+      from: startDate,
+      to: endDate,
+    });
+    await db
+      .delete(analyticsEcommerceItems)
+      .where(
+        and(
+          eq(analyticsEcommerceItems.propertyExternalId, plan.propertyId),
+          gte(analyticsEcommerceItems.farmDate, plan.deleteFrom),
+          lte(analyticsEcommerceItems.farmDate, plan.deleteTo),
+        ),
+      );
     for (const fact of facts) {
       await db
         .insert(analyticsEcommerceItems)

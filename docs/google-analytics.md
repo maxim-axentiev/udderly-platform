@@ -77,9 +77,23 @@ Typed tables (not one table per API resource):
 
 GA metrics use `numeric(20,9)`. They are not Square integer minor units.
 
-Reruns upsert on the unique grain and are idempotent.
+Reruns upsert on unique grains. Dimensional families now **replace** the property+date window after the provider report passes quality gates, so a grain Google no longer returns is removed. Daily totals still merge by owned component columns; a missing daily-component date nulls only that component. Source snapshots are versioned evidence and are not deleted.
 
-## Report families
+## Historical coverage (production, through 2026-10-01)
+
+Trusted canonical daily coverage:
+
+| Period | Coverage |
+| --- | --- |
+| 2022 | **2022-04-13** only (known gap afterward) |
+| 2023 | **2023-03-16..2023-12-31** (291 days; January, February, and early March absent) |
+| 2024 | **2024-01-01..2024-12-31** (366 days) |
+| 2025 | **2025-01-01..2025-12-31** (365 days) |
+| 2026 | **2026-01-01..2026-10-01** (274 days; last completed farm day at backfill time) |
+
+Do not manufacture missing dates. `goat_recess_booking` was absent in canonical event facts for 2023–2026-10-01; that does not reconstruct Admin key-event configuration history.
+
+## Commands
 
 Daily totals are split into three Data API requests (metric-count limit) then **merged by owned columns** onto `analytics_daily_total`:
 
@@ -150,25 +164,59 @@ npm run import:google-analytics:dev -- --from 2023-03-01 --to 2023-03-07
 npm run import:google-analytics:dev -- --from 2023-03-01 --to 2023-03-07 --admin-only
 npm run backfill:google-analytics:dev -- --from 2022-04-13 --to 2023-03-31 --dry-run
 npm run backfill:google-analytics:dev -- --from 2022-04-13 --to 2023-03-31
+npm run increment:google-analytics:dev -- --dry-run
+npm run increment:google-analytics:dev
+npm run increment:google-analytics -- --dry-run
+npm run increment:google-analytics
 ```
 
-`--from` and `--to` are required inclusive America/Toronto property dates. Ranges before 2022-04-13 are rejected. The current farm day and future dates are rejected.
+`--from` and `--to` are required inclusive America/Toronto property dates on **import** and **historical backfill**. Ranges before 2022-04-13 are rejected. The current farm day and future dates are rejected.
 
-Backfill is weekly chunks, **oldest-to-newest**, restartable, fail-closed (stop on first failed chunk). Dry-run prints the plan only. Do not run production backfill from this implementation pass.
+Backfill is weekly chunks, **oldest-to-newest**, restartable, fail-closed (stop on first failed chunk). Dry-run prints the plan only. There is no unbounded “everything ever” command.
 
-There is no unbounded “everything ever” command.
+The incremental CLI **rejects** `--from`/`--to`. Use backfill for an explicit historical range.
 
-## Incremental refresh (next phase)
+## Incremental refresh
 
-Attribution lookbacks from Admin (not hardcoded forever): acquisition 30 days, other conversions 90 days, reporting model paid-and-organic data-driven.
+GA attribution and key-event reporting can change after first collection. Incremental sync refreshes **four discrete completed America/Toronto farm dates**, not a rolling 14-day range:
 
-Refreshing only the last 3 days is **not** enough for conversion-heavy families. A later incremental importer should refresh at least:
+- yesterday
+- 3 days ago
+- 7 days ago
+- 14 days ago
 
-- 7–14 completed days for traffic/session families
-- ~30 completed days for session/first-user acquisition
-- ~90 completed days for key-event / purchase families
+If today is `2026-10-02` America/Toronto, that is `2026-10-01`, `2026-09-29`, `2026-09-25`, `2026-09-18`. Dates are deduplicated, sorted **oldest-to-newest**, and never include the current farm day. Dates before `2022-04-13` are skipped (logged), not requested.
 
-No scheduler was added; run the bounded CLI when ready.
+This is intentionally bounded. Historical backfill remains a separate CLI. Incremental must not be used as a silent full-history crawler.
+
+`--as-of YYYY-MM-DD` is a test/dev planning override: treat that civil date as “today” and still emit at most those four offsets. It is not a range backfill.
+
+Dry-run (`--dry-run`) prints today, eligible dates, skips, family list. It makes **no** Google Data/Admin calls and **no** DB writes (including no advisory lock).
+
+Live incremental:
+
+1. PostgreSQL session advisory lock `google-analytics-incremental` (`pg_try_advisory_lock` on a reserved connection)
+2. Admin current-state **once** (same sanitization/privacy as historical ingest; not historical Admin reconstruction)
+3. Each eligible date as `startDate=endDate` through the existing importer (11 families, pagination, quality gates, recon)
+4. Unlock
+
+Fail-closed: any failed date returns nonzero, logs the farm date and gate/family when present, and does not mark the run successful. Earlier dates in the same run may already be persisted; the importer is not transactional across dates. Do not auto-broaden the set or retry indefinitely.
+
+Recommended production cadence (**not installed**): once daily after the previous Toronto day is complete, e.g. **06:15 America/Toronto**. A second overlapping incremental process exits with `ga_incremental_already_running`. Do not run historical backfill concurrently with incremental.
+
+Recovery after a failed date: fix the cause, then rerun `increment:google-analytics` (idempotent upsert/replace on the same four offsets for “today”), or run a **bounded** backfill `--from <failed> --to <failed>` if that single date must be repaired outside the incremental set.
+
+### Sessions diagnostic
+
+`sessions` is an HLL++ estimate. Dimensional session sums vs date-grain sessions are logged as diagnostics only and **do not** fail incremental or backfill. Exact additive recon remains `eventCount`.
+
+### Replacement vs snapshots
+
+Simple upsert left stale dimensional grains when Google later omitted a key. After quality/pagination pass, dimensional tables **delete then insert** only `property_external_id` + `farm_date` in the requested window for that family. An authoritative empty report clears that window. Other dates, properties, families, and `source_snapshot` / `source_identity` rows are untouched.
+
+Daily totals: never delete the merged row when refreshing one component. Missing dates in that component null only that component’s metrics and stamp that component’s snapshot FK. Source evidence may grow on refresh (payload hash / quota metadata). Canonical grains stay unique. `source_identity` remains one row per `(provider, entity_type, external_id)`.
+
+Admin config is current-state as of snapshot `observed_at`.
 
 ## Tracking gap
 

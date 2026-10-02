@@ -4,6 +4,7 @@ import { GA_EARLIEST_USEFUL_DATE } from "./google-analytics.constants";
 import {
   addCalendarDays,
   assertHistoricalGaRange,
+  farmDatesInclusive,
   lastCompletedDate,
   parseGaWindow,
   todayInTimeZone,
@@ -58,4 +59,9 @@ test("weekly chunks cover every farm date once, including DST transitions", () =
     chunks.map((chunk) => `${chunk.from}/${chunk.to}`),
     ["2023-03-08/2023-03-14", "2023-03-15/2023-03-21"],
   );
+});
+
+test("inclusive farm date enumeration uses civil calendar days", () => {
+  assert.deepEqual(farmDatesInclusive("2026-09-18", "2026-09-18"), ["2026-09-18"]);
+  assert.equal(farmDatesInclusive("2026-02-27", "2026-03-01").includes("2026-02-28"), true);
 });

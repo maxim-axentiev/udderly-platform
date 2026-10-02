@@ -73,6 +73,8 @@
     "import:google-analytics:dev": "npm run import:google-analytics:dev -w @udderly/api --",
     "backfill:google-analytics": "npm run backfill:google-analytics -w @udderly/api --",
     "backfill:google-analytics:dev": "npm run backfill:google-analytics:dev -w @udderly/api --",
+    "increment:google-analytics": "npm run increment:google-analytics -w @udderly/api --",
+    "increment:google-analytics:dev": "npm run increment:google-analytics:dev -w @udderly/api --",
     "test:google-analytics": "npm run test:google-analytics -w @udderly/api"
   },
   "devDependencies": {

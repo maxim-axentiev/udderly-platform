@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import type postgres from "postgres";
 import * as schema from "./schema";
+import { withPostgresAdvisoryLock } from "./advisory-lock";
 
 export type AppDatabase = PostgresJsDatabase<typeof schema>;
 
@@ -19,6 +20,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     readonly db: AppDatabase,
     private readonly client: postgres.Sql,
   ) {}
+
+  async withAdvisoryLock<T>(lockName: string, run: () => Promise<T>): Promise<T> {
+    return withPostgresAdvisoryLock(
+      this.client as unknown as Parameters<typeof withPostgresAdvisoryLock>[0],
+      lockName,
+      run,
+    );
+  }
 
   async onModuleInit(): Promise<void> {
     try {

@@ -25,6 +25,11 @@ export const GA_REPORT_PAGE_LIMIT = 100_000;
 export const GA_MAX_PAGES = 50;
 export const GA_EARLIEST_USEFUL_DATE = "2022-04-13";
 
+/** Completed farm-day offsets behind America/Toronto today. Not a contiguous range. */
+export const GA_INCREMENTAL_DAY_OFFSETS = [1, 3, 7, 14] as const;
+
+export const GA_INCREMENTAL_LOCK_NAME = "google-analytics-incremental";
+
 export const FORBIDDEN_CUSTOM_DIMENSION_NAMES = [
   "email_address",
   "tel_number",

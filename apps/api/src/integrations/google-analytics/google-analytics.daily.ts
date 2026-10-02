@@ -66,6 +66,15 @@ export function dailyComponentOwnedKeys(component: GaDailyComponentId): string[]
   return [...DAILY_COMPONENT_METRICS[component]];
 }
 
+/** Clear only this component's metrics. Never deletes the merged daily row. */
+export function dailyComponentNullOwnedMetrics(
+  component: GaDailyComponentId,
+): Record<string, null> {
+  return Object.fromEntries(
+    dailyComponentOwnedKeys(component).map((key) => [key, null]),
+  ) as Record<string, null>;
+}
+
 export function dailyTotalsComponentsComplete(row: DailyTotalComponents): boolean {
   return Boolean(
     row.siteTotalsSnapshotId &&

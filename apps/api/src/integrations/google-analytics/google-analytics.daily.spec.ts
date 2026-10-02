@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   applyDailyComponentMetrics,
+  dailyComponentNullOwnedMetrics,
   dailyTotalsComponentsComplete,
 } from "./google-analytics.daily";
 
@@ -28,6 +29,12 @@ test("missing ecommerce stays undefined, not zero", () => {
   const row = applyDailyComponentMetrics({}, "daily_totals", { sessions: "5" });
   assert.equal(row.sessions, "5");
   assert.equal(row.ecommercePurchases, undefined);
+});
+
+test("nulling ecommerce owned metrics does not list site totals keys", () => {
+  const cleared = dailyComponentNullOwnedMetrics("ecommerce_totals");
+  assert.equal(cleared.transactions, null);
+  assert.equal("sessions" in cleared, false);
 });
 
 test("a partial daily row is not complete", () => {
