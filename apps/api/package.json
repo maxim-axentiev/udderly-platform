@@ -60,7 +60,12 @@
     "backfill:square-commerce": "node dist/integrations/square/backfill-square-commerce.cli.js",
     "backfill:square-commerce:dev": "tsx src/integrations/square/backfill-square-commerce.cli.ts",
     "test:square-backfill": "tsx --test src/integrations/square/square.commerce.backfill.spec.ts",
-    "test:square-commerce": "tsx --test src/integrations/square/square.commerce.sanitize.spec.ts src/integrations/square/square.commerce.money.spec.ts src/integrations/square/square.commerce.line.spec.ts src/integrations/square/square.client.commerce.spec.ts src/integrations/square/square.commerce.reconcile.spec.ts src/integrations/square/square.commerce.inspect.spec.ts src/integrations/square/square.commerce.payment-class.spec.ts && tsx src/integrations/square/test-square-commerce.cli.ts"
+    "test:square-commerce": "tsx --test src/integrations/square/square.commerce.sanitize.spec.ts src/integrations/square/square.commerce.money.spec.ts src/integrations/square/square.commerce.line.spec.ts src/integrations/square/square.client.commerce.spec.ts src/integrations/square/square.commerce.reconcile.spec.ts src/integrations/square/square.commerce.inspect.spec.ts src/integrations/square/square.commerce.payment-class.spec.ts && tsx src/integrations/square/test-square-commerce.cli.ts",
+    "import:google-analytics": "node dist/integrations/google-analytics/import-google-analytics.cli.js",
+    "import:google-analytics:dev": "tsx src/integrations/google-analytics/import-google-analytics.cli.ts",
+    "backfill:google-analytics": "node dist/integrations/google-analytics/backfill-google-analytics.cli.js",
+    "backfill:google-analytics:dev": "tsx src/integrations/google-analytics/backfill-google-analytics.cli.ts",
+    "test:google-analytics": "tsx --test src/integrations/google-analytics/google-analytics.client.spec.ts src/integrations/google-analytics/google-analytics.sanitize.spec.ts src/integrations/google-analytics/google-analytics.reports.spec.ts src/integrations/google-analytics/google-analytics.normalize.spec.ts src/integrations/google-analytics/google-analytics.quality.spec.ts src/integrations/google-analytics/google-analytics.reconcile.spec.ts src/integrations/google-analytics/google-analytics.backfill.spec.ts src/integrations/google-analytics/google-analytics.daily.spec.ts src/integrations/google-analytics/google-analytics.identity.spec.ts src/integrations/google-analytics/google-analytics.range.spec.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

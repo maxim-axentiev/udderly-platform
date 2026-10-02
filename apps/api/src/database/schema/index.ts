@@ -24,3 +24,16 @@ export {
   payments,
   refunds,
 } from "./commerce";
+export {
+  analyticsProperties,
+  analyticsKeyEvents,
+  analyticsDailyTotals,
+  analyticsSessionAcquisition,
+  analyticsFirstUserAcquisition,
+  analyticsLandingPages,
+  analyticsPagePaths,
+  analyticsEvents,
+  analyticsCountries,
+  analyticsDevices,
+  analyticsEcommerceItems,
+} from "./analytics";

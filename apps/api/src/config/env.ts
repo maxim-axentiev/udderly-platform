@@ -29,6 +29,10 @@ const envSchema = z.object({
   SQUARE_ACCESS_TOKEN: optionalTrimmedSecret,
   SQUARE_APPLICATION_ID: optionalTrimmedSecret,
   SQUARE_LOCATION_ID: optionalTrimmedSecret,
+  GOOGLE_ANALYTICS_PROPERTY_ID: optionalTrimmedSecret,
+  GOOGLE_ANALYTICS_CLIENT_ID: optionalTrimmedSecret,
+  GOOGLE_ANALYTICS_CLIENT_SECRET: optionalTrimmedSecret,
+  GOOGLE_ANALYTICS_REFRESH_TOKEN: optionalTrimmedSecret,
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

@@ -146,6 +146,10 @@ Square credentials are optional. The API starts without them.
 SQUARE_ACCESS_TOKEN=
 SQUARE_APPLICATION_ID=
 SQUARE_LOCATION_ID=
+GOOGLE_ANALYTICS_PROPERTY_ID=
+GOOGLE_ANALYTICS_CLIENT_ID=
+GOOGLE_ANALYTICS_CLIENT_SECRET=
+GOOGLE_ANALYTICS_REFRESH_TOKEN=
 ```
 
 Square is the intended farm-store transaction source. The current integration is read-only and does not import business data. To inspect live structure without printing customer or payment PII:

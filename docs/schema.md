@@ -1,6 +1,6 @@
 # Operational schema (Phase 1)
 
-PostgreSQL tables from migrations `0002_operational_core` through `0007_sale_line_item_lifecycle`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Design: `docs/data-model.md`.
+PostgreSQL tables from migrations `0002_operational_core` through `0008_google_analytics`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Google Analytics ingest is a **manual** bounded CLI. Design: `docs/data-model.md`.
 
 ## Tables
 
@@ -24,12 +24,25 @@ PostgreSQL tables from migrations `0002_operational_core` through `0007_sale_lin
 | `product` | Canonical catalog item (archive in place) |
 | `product_variation` | Sellable variation / SKU holder |
 | `product_category_assignment` | Many-to-many product ↔ category |
+| `analytics_property` | Current GA4 property/stream/attribution config |
+| `analytics_key_event` | Current GA4 key-event definitions |
+| `analytics_daily_total` | GA4 site + ecommerce totals by farm date |
+| `analytics_session_acquisition` | GA4 session source/medium/channel by date |
+| `analytics_first_user_acquisition` | GA4 first-user source/medium/channel by date |
+| `analytics_landing_page` | GA4 landing page by date |
+| `analytics_page_path` | GA4 page path by date |
+| `analytics_event` | GA4 event name by date |
+| `analytics_country` | GA4 country by date |
+| `analytics_device` | GA4 device category by date |
+| `analytics_ecommerce_item` | GA4 item id by date |
 
 Plus existing `platform_meta` and `integration_events`.
 
 ## Money
 
 All canonical monetary columns are **integer minor units** plus a 3-letter `currency` code (`CAD` today; never assume CAD forever). Example: CAD $12.34 = `1234`. Never float/double/decimal dollars.
+
+Google Analytics metrics are **not** money columns. They use `numeric(20,9)` on the `analytics_*` tables because GA returns decimal session/engagement/revenue strings. Do not store GA metrics as Square-style integer cents.
 
 `sale.total_amount` is the sale value. **Do not** `SUM(sale.total_amount) + SUM(payment.amount)` for revenue. Payment is cash movement; refund is reversal.
 
@@ -79,6 +92,8 @@ Pull-API copies. Unique `(provider, entity_type, external_id, payload_hash)` so 
 Wherewolf payloads are sanitized before insert (no DOB, signatures, IP, street, full postal/ZIP, guardian, or medical fields). `visit.postal` is left null for this phase.
 
 Square catalog snapshots are sanitized CatalogObject subsets (`square` / `category` \| `item` \| `item_variation`). Square commerce snapshots are sanitized Orders/Payments/Refunds API subsets (`order`, `payment`, `refund`). See `docs/square.md`.
+
+Google Analytics snapshots are sanitized Admin config and allowlisted Data API report pages (`google_analytics` / `property` \| `data_stream` \| `data_retention` \| `key_event` \| `attribution_settings` \| `reporting_identity` \| `google_ads_link` \| `custom_dimension` \| `custom_metric` \| `report`). See `docs/google-analytics.md`. Custom-dimension **values** for `email_address`, `tel_number`, `wp_user_id`, and `author` are never stored.
 
 ## `source_identity`
 

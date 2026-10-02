@@ -76,4 +76,26 @@ export class EnvService {
         this.env.SQUARE_LOCATION_ID,
     );
   }
+
+  get googleAnalytics():
+    | {
+        propertyId: string;
+        clientId: string;
+        clientSecret: string;
+        refreshToken: string;
+      }
+    | undefined {
+    const propertyId = this.env.GOOGLE_ANALYTICS_PROPERTY_ID;
+    const clientId = this.env.GOOGLE_ANALYTICS_CLIENT_ID;
+    const clientSecret = this.env.GOOGLE_ANALYTICS_CLIENT_SECRET;
+    const refreshToken = this.env.GOOGLE_ANALYTICS_REFRESH_TOKEN;
+    if (!propertyId || !clientId || !clientSecret || !refreshToken) {
+      return undefined;
+    }
+    return { propertyId, clientId, clientSecret, refreshToken };
+  }
+
+  get isGoogleAnalyticsConfigured(): boolean {
+    return Boolean(this.googleAnalytics);
+  }
 }
