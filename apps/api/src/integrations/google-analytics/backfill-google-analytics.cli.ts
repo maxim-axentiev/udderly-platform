@@ -28,6 +28,7 @@ async function main(): Promise<void> {
         reconcileWindow: () => ({
           passed: true,
           differences: [],
+          diagnostics: [],
           totals: { rangeLabel: "", families: [] },
         }),
       },

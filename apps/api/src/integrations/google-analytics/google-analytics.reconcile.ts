@@ -29,8 +29,15 @@ export type GaWindowReconcileTotals = {
 export type GaReconcileVerdict = {
   passed: boolean;
   differences: string[];
+  diagnostics: string[];
   totals: GaWindowReconcileTotals;
 };
+
+const SUMMABLE_METRICS = new Set<string>([
+  ...ADDITIVE_DAILY_METRICS,
+  "sessions",
+  "ecommercePurchases",
+]);
 
 export function evaluateGaFamilyReconciliation(
   totals: GaFamilyReconcileTotals,
@@ -64,13 +71,14 @@ export function evaluateGaWindowReconciliation(
   totals: GaWindowReconcileTotals,
 ): GaReconcileVerdict {
   const differences = totals.families.flatMap(evaluateGaFamilyReconciliation);
+  const diagnostics: string[] = [];
   if (
     totals.dailySessions !== undefined &&
     totals.acquisitionSessions !== undefined &&
     !numericEqual(totals.dailySessions, totals.acquisitionSessions)
   ) {
-    differences.push(
-      `sessions daily ${totals.dailySessions} != acquisition ${totals.acquisitionSessions}`,
+    diagnostics.push(
+      `sessions diagnostic daily=${totals.dailySessions} acquisition=${totals.acquisitionSessions} (not a gate)`,
     );
   }
   if (
@@ -85,6 +93,7 @@ export function evaluateGaWindowReconciliation(
   return {
     passed: differences.length === 0,
     differences,
+    diagnostics,
     totals,
   };
 }
@@ -93,7 +102,7 @@ export function sumMetric(
   facts: NormalizedFact[],
   metric: string,
 ): string | undefined {
-  if (!ADDITIVE_DAILY_METRICS.includes(metric as never) && metric !== "ecommercePurchases") {
+  if (!SUMMABLE_METRICS.has(metric)) {
     return undefined;
   }
   let total = 0;

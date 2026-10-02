@@ -185,4 +185,5 @@ export function isForbiddenDimension(name: string): boolean {
   );
 }
 
-export const ADDITIVE_DAILY_METRICS = ["sessions", "eventCount"] as const;
+/** Fail-closed cross-family additivity. `sessions` is HLL++ estimated and is not in this list. */
+export const ADDITIVE_DAILY_METRICS = ["eventCount"] as const;

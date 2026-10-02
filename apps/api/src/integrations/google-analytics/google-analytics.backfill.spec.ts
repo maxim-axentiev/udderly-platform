@@ -50,6 +50,7 @@ test("dry-run prints the chunk plan without importing", async () => {
       reconcileWindow: () => ({
         passed: true,
         differences: [],
+        diagnostics: [],
         totals: { rangeLabel: "", families: [] },
       }),
     },
@@ -80,6 +81,7 @@ test("dry-run does not import admin config or mutate", async () => {
       reconcileWindow: () => ({
         passed: true,
         differences: [],
+        diagnostics: [],
         totals: { rangeLabel: "", families: [] },
       }),
     },
@@ -111,6 +113,7 @@ test("stops on the first failed chunk and is restartable from remaining ranges",
       reconcileWindow: () => ({
         passed: true,
         differences: [],
+        diagnostics: [],
         totals: { rangeLabel: "", families: [] },
       }),
     },
@@ -148,6 +151,7 @@ test("idempotent rerun of a passing chunk is allowed", async () => {
     reconcileWindow: () => ({
       passed: true,
       differences: [],
+      diagnostics: [],
       totals: { rangeLabel: "", families: [] },
     }),
   };
@@ -156,6 +160,35 @@ test("idempotent rerun of a passing chunk is allowed", async () => {
   assert.equal(first.ok, true);
   assert.equal(second.ok, true);
   assert.equal(first.completed, second.completed);
+});
+
+test("session diagnostic does not fail a backfill chunk", async () => {
+  const plan = planGaBackfill({
+    from: "2023-04-04",
+    to: "2023-04-04",
+    dryRun: false,
+    timeZone: "America/Toronto",
+    now: NOW,
+  });
+  const logs: string[] = [];
+  const result = await runGaBackfill(
+    {
+      importWindow: async (window) => emptyImport(window.from, window.to),
+      reconcileWindow: () => ({
+        passed: true,
+        differences: [],
+        diagnostics: [
+          "sessions diagnostic daily=170 acquisition=171 (not a gate)",
+        ],
+        totals: { rangeLabel: "2023-04-04", families: [] },
+      }),
+    },
+    plan,
+    (message) => logs.push(message),
+  );
+  assert.equal(result.ok, true);
+  assert.ok(logs.some((line) => line.includes("PASS")));
+  assert.ok(logs.some((line) => line.includes("sessions diagnostic daily=170")));
 });
 
 function emptyImport(from: string, to: string): GaImportWindowResult {

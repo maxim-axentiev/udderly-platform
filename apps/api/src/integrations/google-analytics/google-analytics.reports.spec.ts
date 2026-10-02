@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { FORBIDDEN_CUSTOM_DIMENSION_NAMES } from "./google-analytics.constants";
 import {
-  FORBIDDEN_CUSTOM_DIMENSION_NAMES,
-} from "./google-analytics.constants";
-import {
+  ADDITIVE_DAILY_METRICS,
   GA_REPORT_DEFINITIONS,
   assertSafeDimensions,
   isForbiddenDimension,
@@ -49,4 +48,8 @@ test("compatibility splits keep daily totals at or below ten metrics", () => {
   assert.ok(reportDefinition("daily_totals").metrics.length <= 10);
   assert.ok(reportDefinition("daily_engagement").metrics.length <= 10);
   assert.ok(reportDefinition("ecommerce_totals").metrics.length <= 10);
+});
+
+test("fail-closed additive recon is eventCount only", () => {
+  assert.deepEqual([...ADDITIVE_DAILY_METRICS], ["eventCount"]);
 });

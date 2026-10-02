@@ -149,6 +149,9 @@ export async function runGaBackfill(
       log(
         `chunk ${chunk.from}..${chunk.to} ${report.reconciliation} families=${report.families.length}`,
       );
+      for (const line of verdict.diagnostics ?? []) {
+        log(`chunk ${chunk.from}..${chunk.to} ${line}`);
+      }
       if (!verdict.passed) {
         return {
           ok: false,

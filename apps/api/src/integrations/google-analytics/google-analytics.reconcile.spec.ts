@@ -28,12 +28,37 @@ function family(
   };
 }
 
+const completeDaily = family("daily_totals", {
+  startDate: "2023-04-04",
+  endDate: "2023-04-04",
+  sourceRows: 1,
+  providerRowCount: 1,
+  canonicalRows: 1,
+});
+
+const completeAcquisition = family("session_acquisition", {
+  startDate: "2023-04-04",
+  endDate: "2023-04-04",
+  sourceRows: 17,
+  providerRowCount: 17,
+  canonicalRows: 17,
+});
+
+const completeEvents = family("event", {
+  startDate: "2023-04-04",
+  endDate: "2023-04-04",
+  sourceRows: 2,
+  providerRowCount: 2,
+  canonicalRows: 2,
+});
+
 test("PASS for a valid no-data tracking-gap month", () => {
   const verdict = evaluateGaWindowReconciliation({
     rangeLabel: "2022-06",
     families: [family("daily_totals"), family("event")],
   });
   assert.equal(verdict.passed, true);
+  assert.deepEqual(verdict.diagnostics, []);
   assert.deepEqual(evaluateGaFamilyReconciliation(family("daily_totals")), []);
 });
 
@@ -42,6 +67,26 @@ test("FAIL on row mismatch", () => {
     family("event", { sourceRows: 2, providerRowCount: 3, canonicalRows: 2 }),
   );
   assert.ok(differences.some((item) => item.includes("rowCount")));
+});
+
+test("session-acquisition source vs canonical row counts remain fail-closed", () => {
+  const verdict = evaluateGaWindowReconciliation({
+    rangeLabel: "2023-04-04",
+    families: [
+      completeDaily,
+      family("session_acquisition", {
+        startDate: "2023-04-04",
+        endDate: "2023-04-04",
+        sourceRows: 17,
+        providerRowCount: 16,
+        canonicalRows: 17,
+      }),
+    ],
+    dailySessions: "170",
+    acquisitionSessions: "171",
+  });
+  assert.equal(verdict.passed, false);
+  assert.ok(verdict.differences.some((item) => item.includes("rowCount")));
 });
 
 test("FAIL on unresolved rows", () => {
@@ -63,82 +108,117 @@ test("thresholding is not reported as unresolved", () => {
   assert.ok(!differences.some((item) => item.includes("unresolved")));
 });
 
-test("additive cross-family session and eventCount checks", () => {
+test("FAIL on sampling", () => {
+  const verdict = evaluateGaWindowReconciliation({
+    rangeLabel: "2023-04-04",
+    families: [family("daily_totals", { sampled: true })],
+  });
+  assert.equal(verdict.passed, false);
+  assert.ok(verdict.differences.some((item) => item.includes("google_analytics_sampled_report")));
+});
+
+test("FAIL on dataLossFromOtherRow", () => {
+  const verdict = evaluateGaWindowReconciliation({
+    rangeLabel: "2023-04-04",
+    families: [family("page_path", { dataLossFromOtherRow: true })],
+  });
+  assert.equal(verdict.passed, false);
+  assert.ok(
+    verdict.differences.some((item) => item.includes("google_analytics_data_loss_from_other_row")),
+  );
+});
+
+test("production 2023-04-04 sessions 170 vs acquisition 171 PASSes with diagnostic", () => {
   const daily: NormalizedFact[] = [
     {
       family: "daily_totals",
-      farmDate: "2023-04-01",
+      farmDate: "2023-04-04",
       dimensions: {},
-      metrics: { sessions: "10", eventCount: "20", activeUsers: "8" },
+      metrics: { sessions: "170", eventCount: "20" },
     },
   ];
   const acquisition: NormalizedFact[] = [
     {
       family: "session_acquisition",
-      farmDate: "2023-04-01",
+      farmDate: "2023-04-04",
       dimensions: { sessionSource: "google" },
-      metrics: { sessions: "6" },
+      metrics: { sessions: "100" },
     },
     {
       family: "session_acquisition",
-      farmDate: "2023-04-01",
+      farmDate: "2023-04-04",
       dimensions: { sessionSource: "direct" },
-      metrics: { sessions: "4" },
+      metrics: { sessions: "71" },
+    },
+  ];
+  const verdict = evaluateGaWindowReconciliation({
+    rangeLabel: "2023-04-04",
+    families: [completeDaily, completeAcquisition],
+    dailySessions: sumMetric(daily, "sessions"),
+    acquisitionSessions: sumMetric(acquisition, "sessions"),
+  });
+  assert.equal(sumMetric(daily, "sessions"), "170");
+  assert.equal(sumMetric(acquisition, "sessions"), "171");
+  assert.equal(verdict.passed, true);
+  assert.deepEqual(verdict.differences, []);
+  assert.equal(verdict.diagnostics.length, 1);
+  assert.match(verdict.diagnostics[0] ?? "", /sessions diagnostic daily=170 acquisition=171/);
+  assert.ok(!verdict.diagnostics.some((item) => /±|percent|toleran/i.test(item)));
+});
+
+test("matching daily and acquisition session sums PASS with no diagnostic", () => {
+  const verdict = evaluateGaWindowReconciliation({
+    rangeLabel: "2023-04-04",
+    families: [completeDaily, completeAcquisition],
+    dailySessions: "170",
+    acquisitionSessions: "170",
+  });
+  assert.equal(verdict.passed, true);
+  assert.deepEqual(verdict.diagnostics, []);
+});
+
+test("eventCount exact match PASSes", () => {
+  const daily: NormalizedFact[] = [
+    {
+      family: "daily_totals",
+      farmDate: "2023-04-04",
+      dimensions: {},
+      metrics: { eventCount: "20" },
     },
   ];
   const events: NormalizedFact[] = [
     {
       family: "event",
-      farmDate: "2023-04-01",
+      farmDate: "2023-04-04",
       dimensions: { eventName: "page_view" },
       metrics: { eventCount: "12" },
     },
     {
       family: "event",
-      farmDate: "2023-04-01",
+      farmDate: "2023-04-04",
       dimensions: { eventName: "purchase" },
       metrics: { eventCount: "8" },
     },
   ];
-  const pass = evaluateGaWindowReconciliation({
-    rangeLabel: "2023-04-01",
-    families: [
-      family("daily_totals", {
-        startDate: "2023-04-01",
-        endDate: "2023-04-01",
-        sourceRows: 1,
-        providerRowCount: 1,
-        canonicalRows: 1,
-      }),
-      family("session_acquisition", {
-        startDate: "2023-04-01",
-        endDate: "2023-04-01",
-        sourceRows: 2,
-        providerRowCount: 2,
-        canonicalRows: 2,
-      }),
-      family("event", {
-        startDate: "2023-04-01",
-        endDate: "2023-04-01",
-        sourceRows: 2,
-        providerRowCount: 2,
-        canonicalRows: 2,
-      }),
-    ],
-    dailySessions: sumMetric(daily, "sessions"),
-    acquisitionSessions: sumMetric(acquisition, "sessions"),
+  const verdict = evaluateGaWindowReconciliation({
+    rangeLabel: "2023-04-04",
+    families: [completeDaily, completeEvents],
     eventCount: sumMetric(daily, "eventCount"),
     eventFamilyEventCount: sumMetric(events, "eventCount"),
   });
-  assert.equal(pass.passed, true);
+  assert.equal(verdict.passed, true);
+  assert.deepEqual(verdict.differences, []);
+});
 
-  const fail = evaluateGaWindowReconciliation({
-    rangeLabel: "2023-04-01",
-    families: pass.totals.families,
-    dailySessions: "10",
-    acquisitionSessions: "9",
+test("eventCount mismatch FAILs", () => {
+  const verdict = evaluateGaWindowReconciliation({
+    rangeLabel: "2023-04-04",
+    families: [completeDaily, completeEvents],
+    eventCount: "20",
+    eventFamilyEventCount: "19",
   });
-  assert.equal(fail.passed, false);
+  assert.equal(verdict.passed, false);
+  assert.ok(verdict.differences.some((item) => item.includes("eventCount")));
 });
 
 test("does not treat active users as additive", () => {
@@ -158,7 +238,7 @@ test("does not treat active users as additive", () => {
   );
 });
 
-test("literal (other) rows are included in additive session sums", () => {
+test("literal (other) rows are included in session diagnostic sums", () => {
   const total = sumMetric(
     [
       {
@@ -177,6 +257,32 @@ test("literal (other) rows are included in additive session sums", () => {
     "sessions",
   );
   assert.equal(total, "10");
+});
+
+test("literal (other) event rows remain in additive eventCount", () => {
+  const verdict = evaluateGaWindowReconciliation({
+    rangeLabel: "2023-04-04",
+    families: [completeDaily, completeEvents],
+    eventCount: "10",
+    eventFamilyEventCount: sumMetric(
+      [
+        {
+          family: "event",
+          farmDate: "2023-04-04",
+          dimensions: { eventName: "page_view" },
+          metrics: { eventCount: "8" },
+        },
+        {
+          family: "event",
+          farmDate: "2023-04-04",
+          dimensions: { eventName: "(other)" },
+          metrics: { eventCount: "2" },
+        },
+      ],
+      "eventCount",
+    ),
+  });
+  assert.equal(verdict.passed, true);
 });
 
 test("missing ecommerce facts do not become zero for additive checks", () => {

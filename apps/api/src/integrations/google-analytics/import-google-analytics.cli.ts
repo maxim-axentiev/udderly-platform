@@ -49,6 +49,9 @@ async function main(): Promise<void> {
         `${family.family} rows=${family.sourceRows} requests=${family.requestCount} rowCount=${family.providerRowCount}`,
       );
     }
+    for (const line of verdict.diagnostics) {
+      console.log(line);
+    }
     if (!verdict.passed) {
       console.error(verdict.differences.join("\n"));
       process.exitCode = 1;

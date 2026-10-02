@@ -125,22 +125,21 @@ Disabled: Google Ads campaign dimensions, Search Console fields in GA, demograph
 
 Empty successful reports are valid (including the ~2022-05 through 2023-02 tracking gap). Absence is not synthesized as zero facts.
 
-`(not set)` is stored as a dimension value. Literal provider value `(other)` is stored and included in additive sums. It is **not** the same as `dataLossFromOtherRow` (cardinality overflow that dropped data even from the other-row). Import already fails when `dataLossFromOtherRow=true`. A literal `(other)` with `dataLossFromOtherRow=false` means the remainder is in that row.
+`(not set)` is stored as a dimension value. Literal provider value `(other)` is stored. It is **not** the same as `dataLossFromOtherRow` (cardinality overflow that dropped data even from the other-row). Import already fails when `dataLossFromOtherRow=true`. A literal `(other)` with `dataLossFromOtherRow=false` means the remainder is in that row. `(other)` session/event rows are included when summing eventCount for recon (and when logging a sessions diagnostic).
 
 Metric `0` is distinct from a missing row and from a not-yet-ingested component (NULL snapshot FK).
 
 ## Reconciliation
 
-Per family: request succeeded, pagination complete, `rowCount` matches source rows, unique keys, expected headers, no unresolved rows, no sampling/data-loss/thresholding.
+Per family (fail-closed): request succeeded, pagination complete, `rowCount` matches source rows, unique keys, expected headers, no unresolved rows, no sampling / `dataLossFromOtherRow` / thresholding.
 
-Additive cross-checks only (and only when both families were ingested in the window):
+GA `sessions` is an HLL++ estimated unique-count metric. The arithmetic sum of session-acquisition (or other dimensional) session rows is **not** guaranteed to equal date-grain sessions. Date-grain `analytics_daily_total.sessions` is canonical for total sessions. Acquisition rows remain canonical at their own grain. Cross-family session equality is **not** a reconciliation gate. A non-failing diagnostic is logged when both families exist and the sums differ.
 
-- site-component daily `sessions` vs session-acquisition `sessions` sum, **including** `(other)` rows
-- site-component daily `eventCount` vs event-family `eventCount` sum, **including** `(other)` rows
+Exact additive check (when both families were ingested in the window):
 
-These are valid because sessions and eventCount are additive at those grains when pagination is complete and `dataLossFromOtherRow` is false. Thresholding fails the import before this check. Country/device session additivity is not enforced (country can hit `(other)` / cardinality). Users and rates are not additive.
+- site-component daily `eventCount` vs event-family `eventCount` sum, including `(other)` rows
 
-**Not** enforced: activeUsers, totalUsers, newUsers, engagement rates, first-user vs session acquisition, item vs totals ecommerce.
+Country/device session additivity is not enforced. Users, rates, durations, and first-user vs session acquisition are not additive. Item vs totals ecommerce is not enforced.
 
 `analytics_property` / key-event Admin rows are **current-state as of snapshot `observed_at`**. They do not reconstruct 2022 retention, identity, or stream settings. Key-event `provider_create_time` is Google's create time and must not be used to treat earlier event names as key events.
 
