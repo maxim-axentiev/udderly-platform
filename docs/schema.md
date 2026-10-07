@@ -1,6 +1,6 @@
 # Operational schema (Phase 1)
 
-PostgreSQL tables from migrations `0002_operational_core` through `0008_google_analytics`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Google Analytics ingest is a **manual** bounded CLI. Design: `docs/data-model.md`.
+PostgreSQL tables from migrations `0002_operational_core` through `0009_google_search_console`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Google Analytics and Google Search Console ingest are **manual** bounded CLIs. Design: `docs/data-model.md`.
 
 ## Tables
 
@@ -35,6 +35,13 @@ PostgreSQL tables from migrations `0002_operational_core` through `0008_google_a
 | `analytics_country` | GA4 country by date |
 | `analytics_device` | GA4 device category by date |
 | `analytics_ecommerce_item` | GA4 item id by date |
+| `search_console_property` | Current Search Console domain property |
+| `search_console_daily_total` | GSC property totals by `gsc_date` |
+| `search_console_query` | GSC query by date |
+| `search_console_page` | GSC page by date |
+| `search_console_country` | GSC country by date |
+| `search_console_device` | GSC device by date |
+| `search_console_search_appearance` | GSC search appearance by date |
 
 Plus existing `platform_meta` and `integration_events`.
 
@@ -94,6 +101,8 @@ Wherewolf payloads are sanitized before insert (no DOB, signatures, IP, street, 
 Square catalog snapshots are sanitized CatalogObject subsets (`square` / `category` \| `item` \| `item_variation`). Square commerce snapshots are sanitized Orders/Payments/Refunds API subsets (`order`, `payment`, `refund`). See `docs/square.md`.
 
 Google Analytics snapshots are sanitized Admin config and allowlisted Data API report pages (`google_analytics` / `property` \| `data_stream` \| `data_retention` \| `key_event` \| `attribution_settings` \| `reporting_identity` \| `google_ads_link` \| `custom_dimension` \| `custom_metric` \| `report`). See `docs/google-analytics.md`. Custom-dimension **values** for `email_address`, `tel_number`, `wp_user_id`, and `author` are never stored.
+
+Google Search Console snapshots are sanitized site records and Search Analytics pages (`google_search_console` / `site` \| `report`) with `dataState=final`. See `docs/google-search-console.md`. `gsc_date` is Google's reporting civil date, not a Toronto farm date.
 
 ## `source_identity`
 

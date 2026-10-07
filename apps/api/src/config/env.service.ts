@@ -98,4 +98,26 @@ export class EnvService {
   get isGoogleAnalyticsConfigured(): boolean {
     return Boolean(this.googleAnalytics);
   }
+
+  get googleSearchConsole():
+    | {
+        siteUrl: string;
+        clientId: string;
+        clientSecret: string;
+        refreshToken: string;
+      }
+    | undefined {
+    const siteUrl = this.env.GOOGLE_SEARCH_CONSOLE_SITE_URL;
+    const clientId = this.env.GOOGLE_SEARCH_CONSOLE_CLIENT_ID;
+    const clientSecret = this.env.GOOGLE_SEARCH_CONSOLE_CLIENT_SECRET;
+    const refreshToken = this.env.GOOGLE_SEARCH_CONSOLE_REFRESH_TOKEN;
+    if (!siteUrl || !clientId || !clientSecret || !refreshToken) {
+      return undefined;
+    }
+    return { siteUrl, clientId, clientSecret, refreshToken };
+  }
+
+  get isGoogleSearchConsoleConfigured(): boolean {
+    return Boolean(this.googleSearchConsole);
+  }
 }

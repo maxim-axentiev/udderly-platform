@@ -2,7 +2,7 @@
 
 Read-only GA4 ingest for Udderly. Provider name: `google_analytics`.
 
-This is **not** Google Ads campaign reporting and **not** Google Search Console. Ads link metadata may be stored as configuration evidence. Search Console is a separate future integration.
+This is **not** Google Ads campaign reporting and **not** Google Search Console. Ads link metadata may be stored as configuration evidence. Search Console is a sibling integration (`docs/google-search-console.md`); do not mix GSC facts into `analytics_*` tables.
 
 ## Property
 

@@ -75,7 +75,14 @@
     "backfill:google-analytics:dev": "npm run backfill:google-analytics:dev -w @udderly/api --",
     "increment:google-analytics": "npm run increment:google-analytics -w @udderly/api --",
     "increment:google-analytics:dev": "npm run increment:google-analytics:dev -w @udderly/api --",
-    "test:google-analytics": "npm run test:google-analytics -w @udderly/api"
+    "test:google-analytics": "npm run test:google-analytics -w @udderly/api",
+    "import:google-search-console": "npm run import:google-search-console -w @udderly/api --",
+    "import:google-search-console:dev": "npm run import:google-search-console:dev -w @udderly/api --",
+    "backfill:google-search-console": "npm run backfill:google-search-console -w @udderly/api --",
+    "backfill:google-search-console:dev": "npm run backfill:google-search-console:dev -w @udderly/api --",
+    "increment:google-search-console": "npm run increment:google-search-console -w @udderly/api --",
+    "increment:google-search-console:dev": "npm run increment:google-search-console:dev -w @udderly/api --",
+    "test:google-search-console": "npm run test:google-search-console -w @udderly/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

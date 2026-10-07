@@ -37,3 +37,12 @@ export {
   analyticsDevices,
   analyticsEcommerceItems,
 } from "./analytics";
+export {
+  searchConsoleProperties,
+  searchConsoleDailyTotals,
+  searchConsoleQueries,
+  searchConsolePages,
+  searchConsoleCountries,
+  searchConsoleDevices,
+  searchConsoleSearchAppearances,
+} from "./search-console";

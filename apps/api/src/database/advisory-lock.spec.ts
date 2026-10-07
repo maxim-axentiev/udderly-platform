@@ -2,6 +2,24 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { withPostgresAdvisoryLock } from "./advisory-lock";
 
+test("Search Console incremental uses a distinct lock name", async () => {
+  const names: string[] = [];
+  const reserved = Object.assign(
+    async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      names.push(String(values[0] ?? strings.join("")));
+      return [{ locked: true }];
+    },
+    { release() {} },
+  );
+  await withPostgresAdvisoryLock(
+    { async reserve() { return reserved; } },
+    "google-search-console-incremental",
+    async () => undefined,
+  );
+  assert.equal(names[0], "google-search-console-incremental");
+  assert.notEqual(names[0], "google-analytics-incremental");
+});
+
 test("holds a session lock for the run and unlocks afterward", async () => {
   const calls: string[] = [];
   const reserved = Object.assign(

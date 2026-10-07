@@ -8,6 +8,7 @@ import { WherewolfModule } from "./integrations/wherewolf/wherewolf.module";
 import { FareharborModule } from "./integrations/fareharbor/fareharbor.module";
 import { SquareModule } from "./integrations/square/square.module";
 import { GoogleAnalyticsModule } from "./integrations/google-analytics/google-analytics.module";
+import { GoogleSearchConsoleModule } from "./integrations/google-search-console/google-search-console.module";
 import { QueueModule } from "./queue/queue.module";
 import { RedisModule } from "./redis/redis.module";
 
@@ -22,6 +23,7 @@ import { RedisModule } from "./redis/redis.module";
     FareharborModule,
     SquareModule,
     GoogleAnalyticsModule,
+    GoogleSearchConsoleModule,
   ],
 })
 export class AppModule implements NestModule {

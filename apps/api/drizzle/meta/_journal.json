@@ -64,6 +64,13 @@
       "when": 1789505000000,
       "tag": "0008_google_analytics",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1789506000000,
+      "tag": "0009_google_search_console",
+      "breakpoints": true
     }
   ]
 }
