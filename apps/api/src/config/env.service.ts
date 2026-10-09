@@ -145,4 +145,16 @@ export class EnvService {
   get isMetaAdsConfigured(): boolean {
     return Boolean(this.metaAds);
   }
+
+  get mailchimp(): { apiKey: string } | undefined {
+    const apiKey = this.env.MAILCHIMP_API_KEY;
+    if (!apiKey) {
+      return undefined;
+    }
+    return { apiKey };
+  }
+
+  get isMailchimpConfigured(): boolean {
+    return Boolean(this.mailchimp);
+  }
 }

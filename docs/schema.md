@@ -1,6 +1,6 @@
 # Operational schema (Phase 1)
 
-PostgreSQL tables from migrations `0002_operational_core` through `0010_meta_ads`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Google Analytics, Google Search Console, and Meta Ads ingest are **manual** bounded CLIs. Design: `docs/data-model.md`.
+PostgreSQL tables from migrations `0002_operational_core` through `0011_mailchimp`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Google Analytics, Google Search Console, Meta Ads, and Mailchimp ingest are **manual** bounded CLIs. Design: `docs/data-model.md`.
 
 ## Tables
 
@@ -50,6 +50,13 @@ PostgreSQL tables from migrations `0002_operational_core` through `0010_meta_ads
 | `meta_ads_campaign_daily` | Meta campaign Insights by date + window |
 | `meta_ads_ad_set_daily` | Meta ad set Insights by date + window |
 | `meta_ads_ad_daily` | Meta ad Insights by date + window |
+| `mailchimp_account` | Current Mailchimp account |
+| `mailchimp_audience` | Current Mailchimp audience (aggregate stats only) |
+| `mailchimp_audience_monthly` | Audience growth-history by year-month |
+| `mailchimp_audience_daily` | Audience list activity by Toronto date |
+| `mailchimp_campaign` | Sent Mailchimp campaign metadata |
+| `mailchimp_campaign_report` | Current campaign report totals |
+| `mailchimp_campaign_link` | Aggregate clicks per campaign URL |
 
 Plus existing `platform_meta` and `integration_events`.
 
@@ -113,6 +120,8 @@ Google Analytics snapshots are sanitized Admin config and allowlisted Data API r
 Google Search Console snapshots are sanitized site records and Search Analytics pages (`google_search_console` / `site` \| `report`) with `dataState=final`. See `docs/google-search-console.md`. `gsc_date` is Google's reporting civil date, not a Toronto farm date.
 
 Meta Ads snapshots are sanitized Graph account/campaign/ad set/ad records and Insights pages (`meta_ads` / `account` \| `campaign` \| `ad_set` \| `ad` \| `insight_report`) with pinned attribution `7d_click,1d_view`. See `docs/meta-ads.md`. `metric_date` is America/Toronto. `spend_amount` is CAD integer minor units.
+
+Mailchimp snapshots are sanitized Marketing API 3.0 aggregate resources (`mailchimp` / `account` \| `audience` \| `growth_history` \| `list_activity` \| `campaign` \| `campaign_report` \| `click_report`). Member, email, and consent payloads are rejected. See `docs/mailchimp.md`. `metric_date` is America/Toronto. Titles, subject lines, and click URLs are allowed free text and may be sensitive.
 
 ## `source_identity`
 

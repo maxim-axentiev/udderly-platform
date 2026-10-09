@@ -68,7 +68,7 @@ It is sized for a seasonal agritourism business, not a master-data platform.
 | `source_snapshot` | Pull-API JSONB copies of Wherewolf / Square / FH history |
 | Canonical table named `order` | Rejected: Square-specific word; use `sale` |
 
-**Deliberately omitted:** inventory ledgers, tax-rate dimensions, affiliate tables, Square Instant Profile as people, Mailchimp lists, Sanity as system of record, event sourcing every field.
+**Deliberately omitted:** inventory ledgers, tax-rate dimensions, affiliate tables, Square Instant Profile as people, Mailchimp *member* lists / email join keys, Sanity as system of record, event sourcing every field. Phase 1 Mailchimp ingest is aggregate reporting only (`docs/mailchimp.md`); it is not the older email-matching roadmap.
 
 ---
 
@@ -167,9 +167,9 @@ Consent **changes over time**. Not a boolean on `person`.
 - `observed_at` — when we ingested it
 - `provenance` — `integration_event_id` or future snapshot id
 
-Wherewolf `marketing` (54.7% on cropped guests) and booking `smsOptIn` are separate events. Mailchimp later adds rows. Never overwrite.
+Wherewolf `marketing` (54.7% on cropped guests) and booking `smsOptIn` are separate events. Mailchimp member-level consent is **out of Phase 1**. Never overwrite.
 
-Phase 1: leave flags on the fact (`visit.marketing_opt_in` / `booking_contact.sms_opt_in`) as **last-seen operational copies**, not a consent ledger. Promote to `consent_event` when we start matching people or Mailchimp.
+Phase 1: leave flags on the fact (`visit.marketing_opt_in` / `booking_contact.sms_opt_in`) as **last-seen operational copies**, not a consent ledger. Do not promote Mailchimp into `consent_event` until an explicit identity phase. Aggregate Mailchimp reporting is a separate sibling (`docs/mailchimp.md`).
 
 ---
 

@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { withPostgresAdvisoryLock } from "./advisory-lock";
+import {
+  MAILCHIMP_IMPORT_LOCK_NAME,
+  MAILCHIMP_INCREMENTAL_LOCK_NAME,
+} from "../integrations/mailchimp/mailchimp.constants";
 
 test("Search Console incremental uses a distinct lock name", async () => {
   const names: string[] = [];
@@ -19,6 +23,7 @@ test("Search Console incremental uses a distinct lock name", async () => {
   assert.equal(names[0], "google-search-console-incremental");
   assert.notEqual(names[0], "google-analytics-incremental");
   assert.notEqual(names[0], "meta-ads-import");
+  assert.notEqual(names[0], "mailchimp-import");
 });
 
 test("Meta Ads import uses a distinct lock name from GA and GSC", async () => {
@@ -38,6 +43,32 @@ test("Meta Ads import uses a distinct lock name from GA and GSC", async () => {
   assert.equal(names[0], "meta-ads-import");
   assert.notEqual(names[0], "google-analytics-incremental");
   assert.notEqual(names[0], "google-search-console-incremental");
+  assert.notEqual(names[0], "mailchimp-import");
+});
+
+test("Mailchimp import uses a distinct lock name from GA, GSC, and Meta Ads", async () => {
+  const names: string[] = [];
+  const reserved = Object.assign(
+    async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      names.push(String(values[0] ?? strings.join("")));
+      return [{ locked: true }];
+    },
+    { release() {} },
+  );
+  await withPostgresAdvisoryLock(
+    { async reserve() { return reserved; } },
+    "mailchimp-import",
+    async () => undefined,
+  );
+  assert.equal(names[0], "mailchimp-import");
+  assert.notEqual(names[0], "google-analytics-incremental");
+  assert.notEqual(names[0], "google-search-console-incremental");
+  assert.notEqual(names[0], "meta-ads-import");
+});
+
+test("Mailchimp incremental shares the import lock name", () => {
+  assert.equal(MAILCHIMP_INCREMENTAL_LOCK_NAME, MAILCHIMP_IMPORT_LOCK_NAME);
+  assert.equal(MAILCHIMP_INCREMENTAL_LOCK_NAME, "mailchimp-import");
 });
 
 test("holds a session lock for the run and unlocks afterward", async () => {

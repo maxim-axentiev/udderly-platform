@@ -80,7 +80,13 @@
     "increment:meta-ads": "node dist/integrations/meta-ads/increment-meta-ads.cli.js",
     "increment:meta-ads:dev": "tsx src/integrations/meta-ads/increment-meta-ads.cli.ts",
     "test:meta-ads": "tsx --test src/database/advisory-lock.spec.ts src/integrations/meta-ads/meta-ads.client.spec.ts src/integrations/meta-ads/meta-ads.sanitize.spec.ts src/integrations/meta-ads/meta-ads.money.spec.ts src/integrations/meta-ads/meta-ads.normalize.spec.ts src/integrations/meta-ads/meta-ads.quality.spec.ts src/integrations/meta-ads/meta-ads.coverage.spec.ts src/integrations/meta-ads/meta-ads.reconcile.spec.ts src/integrations/meta-ads/meta-ads.replace.spec.ts src/integrations/meta-ads/meta-ads.range.spec.ts src/integrations/meta-ads/meta-ads.import-plan.spec.ts src/integrations/meta-ads/meta-ads.errors.spec.ts src/integrations/meta-ads/meta-ads.incremental.spec.ts",
-    "test:meta-ads-db": "tsx src/integrations/meta-ads/test-meta-ads-db.cli.ts"
+    "test:meta-ads-db": "tsx src/integrations/meta-ads/test-meta-ads-db.cli.ts",
+    "import:mailchimp": "node dist/integrations/mailchimp/import-mailchimp.cli.js",
+    "import:mailchimp:dev": "tsx src/integrations/mailchimp/import-mailchimp.cli.ts",
+    "increment:mailchimp": "node dist/integrations/mailchimp/increment-mailchimp.cli.js",
+    "increment:mailchimp:dev": "tsx src/integrations/mailchimp/increment-mailchimp.cli.ts",
+    "test:mailchimp-db": "tsx src/integrations/mailchimp/test-mailchimp-db.cli.ts",
+    "test:mailchimp": "tsx --test src/database/advisory-lock.spec.ts src/integrations/mailchimp/mailchimp.client.spec.ts src/integrations/mailchimp/mailchimp.sanitize.spec.ts src/integrations/mailchimp/mailchimp.normalize.spec.ts src/integrations/mailchimp/mailchimp.quality.spec.ts src/integrations/mailchimp/mailchimp.coverage.spec.ts src/integrations/mailchimp/mailchimp.reconcile.spec.ts src/integrations/mailchimp/mailchimp.replace.spec.ts src/integrations/mailchimp/mailchimp.range.spec.ts src/integrations/mailchimp/mailchimp.import-plan.spec.ts src/integrations/mailchimp/mailchimp.errors.spec.ts src/integrations/mailchimp/mailchimp.incremental.spec.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",

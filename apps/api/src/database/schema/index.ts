@@ -56,3 +56,12 @@ export {
   metaAdsAdSetDaily,
   metaAdsAdDaily,
 } from "./meta-ads";
+export {
+  mailchimpAccounts,
+  mailchimpAudiences,
+  mailchimpAudienceMonthly,
+  mailchimpAudienceDaily,
+  mailchimpCampaigns,
+  mailchimpCampaignReports,
+  mailchimpCampaignLinks,
+} from "./mailchimp";

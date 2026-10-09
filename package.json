@@ -88,7 +88,13 @@
     "increment:meta-ads": "npm run increment:meta-ads -w @udderly/api --",
     "increment:meta-ads:dev": "npm run increment:meta-ads:dev -w @udderly/api --",
     "test:meta-ads": "npm run test:meta-ads -w @udderly/api",
-    "test:meta-ads-db": "npm run test:meta-ads-db -w @udderly/api"
+    "test:meta-ads-db": "npm run test:meta-ads-db -w @udderly/api",
+    "import:mailchimp": "npm run import:mailchimp -w @udderly/api --",
+    "import:mailchimp:dev": "npm run import:mailchimp:dev -w @udderly/api --",
+    "increment:mailchimp": "npm run increment:mailchimp -w @udderly/api --",
+    "increment:mailchimp:dev": "npm run increment:mailchimp:dev -w @udderly/api --",
+    "test:mailchimp-db": "npm run test:mailchimp-db -w @udderly/api",
+    "test:mailchimp": "npm run test:mailchimp -w @udderly/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
