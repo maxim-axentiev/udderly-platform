@@ -46,3 +46,13 @@ export {
   searchConsoleDevices,
   searchConsoleSearchAppearances,
 } from "./search-console";
+export {
+  metaAdsAccounts,
+  metaAdsCampaigns,
+  metaAdsAdSets,
+  metaAdsAds,
+  metaAdsAccountDaily,
+  metaAdsCampaignDaily,
+  metaAdsAdSetDaily,
+  metaAdsAdDaily,
+} from "./meta-ads";

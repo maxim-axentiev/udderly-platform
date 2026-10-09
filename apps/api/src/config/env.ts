@@ -37,6 +37,8 @@ const envSchema = z.object({
   GOOGLE_SEARCH_CONSOLE_CLIENT_ID: optionalTrimmedSecret,
   GOOGLE_SEARCH_CONSOLE_CLIENT_SECRET: optionalTrimmedSecret,
   GOOGLE_SEARCH_CONSOLE_REFRESH_TOKEN: optionalTrimmedSecret,
+  META_ADS_ACCOUNT_ID: optionalTrimmedSecret,
+  META_ADS_ACCESS_TOKEN: optionalTrimmedSecret,
 });
 
 export type AppEnv = z.infer<typeof envSchema>;

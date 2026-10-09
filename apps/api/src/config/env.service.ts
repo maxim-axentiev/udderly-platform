@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { META_ADS_CANONICAL_ACCOUNT_ID } from "../integrations/meta-ads/meta-ads.constants";
 import { AppEnv, validateEnv } from "./env";
 
 @Injectable()
@@ -119,5 +120,29 @@ export class EnvService {
 
   get isGoogleSearchConsoleConfigured(): boolean {
     return Boolean(this.googleSearchConsole);
+  }
+
+  get metaAds():
+    | {
+        accountId: string;
+        accessToken: string;
+      }
+    | undefined {
+    const accountId = this.env.META_ADS_ACCOUNT_ID;
+    const accessToken = this.env.META_ADS_ACCESS_TOKEN;
+    if (!accountId && !accessToken) {
+      return undefined;
+    }
+    if (!accountId || !accessToken) {
+      throw new Error("meta_ads_env_incomplete");
+    }
+    if (accountId !== META_ADS_CANONICAL_ACCOUNT_ID) {
+      throw new Error("meta_ads_account_id_not_canonical");
+    }
+    return { accountId, accessToken };
+  }
+
+  get isMetaAdsConfigured(): boolean {
+    return Boolean(this.metaAds);
   }
 }

@@ -18,6 +18,26 @@ test("Search Console incremental uses a distinct lock name", async () => {
   );
   assert.equal(names[0], "google-search-console-incremental");
   assert.notEqual(names[0], "google-analytics-incremental");
+  assert.notEqual(names[0], "meta-ads-import");
+});
+
+test("Meta Ads import uses a distinct lock name from GA and GSC", async () => {
+  const names: string[] = [];
+  const reserved = Object.assign(
+    async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      names.push(String(values[0] ?? strings.join("")));
+      return [{ locked: true }];
+    },
+    { release() {} },
+  );
+  await withPostgresAdvisoryLock(
+    { async reserve() { return reserved; } },
+    "meta-ads-import",
+    async () => undefined,
+  );
+  assert.equal(names[0], "meta-ads-import");
+  assert.notEqual(names[0], "google-analytics-incremental");
+  assert.notEqual(names[0], "google-search-console-incremental");
 });
 
 test("holds a session lock for the run and unlocks afterward", async () => {

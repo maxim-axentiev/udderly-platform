@@ -82,7 +82,13 @@
     "backfill:google-search-console:dev": "npm run backfill:google-search-console:dev -w @udderly/api --",
     "increment:google-search-console": "npm run increment:google-search-console -w @udderly/api --",
     "increment:google-search-console:dev": "npm run increment:google-search-console:dev -w @udderly/api --",
-    "test:google-search-console": "npm run test:google-search-console -w @udderly/api"
+    "test:google-search-console": "npm run test:google-search-console -w @udderly/api",
+    "import:meta-ads": "npm run import:meta-ads -w @udderly/api --",
+    "import:meta-ads:dev": "npm run import:meta-ads:dev -w @udderly/api --",
+    "increment:meta-ads": "npm run increment:meta-ads -w @udderly/api --",
+    "increment:meta-ads:dev": "npm run increment:meta-ads:dev -w @udderly/api --",
+    "test:meta-ads": "npm run test:meta-ads -w @udderly/api",
+    "test:meta-ads-db": "npm run test:meta-ads-db -w @udderly/api"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
