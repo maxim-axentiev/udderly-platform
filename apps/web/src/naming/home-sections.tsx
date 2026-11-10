@@ -65,7 +65,7 @@ const FAQS = [
   },
   {
     q: "When is the naming deadline?",
-    a: `Submit your name by ${DATES.nameDeadline}. You can name your object right after purchasing.`,
+    a: `Submit your name by ${DATES.nameDeadline} at 11:59 p.m. Eastern Time. You can name your object right after purchasing. Names must be family-friendly and are reviewed by our farm team.`,
   },
   {
     q: "What names are allowed?",
@@ -161,6 +161,10 @@ function Hero() {
         <p className="mx-auto mt-3 max-w-2xl text-base text-background/85">
           A wheelbarrow, a bucket, a goat slide, maybe even our famous goat
           tower. Because apparently, everything deserves a name.
+        </p>
+        <p className="mx-auto mt-4 max-w-xl text-base text-background/90">
+          The name is the bonus: your gift card has to meet that object's
+          minimum price.
         </p>
         <Button asChild size="large" className="mt-8">
           <a href="#objects">
@@ -275,7 +279,7 @@ function HowItWorks() {
     {
       icon: PenLine,
       title: "Name Your Masterpiece",
-      body: `Open the private naming link, choose a family-friendly name of up to ${NAME_MAX_LENGTH} characters, and submit it by ${DATES.nameDeadline}.`,
+      body: `Open the private naming link, choose a family-friendly name of up to ${NAME_MAX_LENGTH} characters, and submit it by ${DATES.nameDeadline} at 11:59 p.m. Eastern Time.`,
     },
     {
       icon: ScrollText,
@@ -355,13 +359,15 @@ function ImportantDates() {
     {
       icon: CalendarCheck,
       date: DATES.buyDeadline,
+      time: "11:59 p.m. Eastern Time",
       title: "Last Day to Buy & Claim",
-      body: "Purchase your qualifying gift card and claim your farm object by this date. After it, no new naming-rights purchases will be available.",
+      body: "Purchase your qualifying gift card and claim your farm object by this deadline. After it, no new naming-rights purchases will be available.",
       tone: "bg-primary-accent text-primary-foreground",
     },
     {
       icon: PenLine,
       date: DATES.nameDeadline,
+      time: "11:59 p.m. Eastern Time",
       title: "Last Day to Submit Your Name",
       body: "Already claimed an object? Submit its name through your private email link. You don't have to wait — you can name it immediately after purchasing.",
       tone: "bg-secondary-accent text-headline",
@@ -387,6 +393,11 @@ function ImportantDates() {
               <p className="mt-2 font-display text-[clamp(2rem,5vw,2.6rem)] font-black uppercase leading-[0.9]">
                 {date.date}
               </p>
+              {"time" in date && date.time ? (
+                <p className="mt-2 font-display text-sm font-extrabold uppercase">
+                  {date.time}
+                </p>
+              ) : null}
             </div>
             <div className="p-6">
               <h3 className="font-display text-2xl font-black uppercase text-headline">
@@ -466,7 +477,7 @@ function BeforeYouBuy() {
     {
       icon: CalendarClock,
       title: "Don't Miss the Naming Deadline",
-      body: `All names must be submitted by ${DATES.nameDeadline}.`,
+      body: `All names must be submitted by ${DATES.nameDeadline} at 11:59 p.m. Eastern Time.`,
     },
   ];
   return (

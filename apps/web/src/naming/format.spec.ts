@@ -37,8 +37,8 @@ test("prices format as Canadian dollars and filter by exact cents", () => {
 });
 
 test("customer deadline messages name the campaign dates", () => {
-  assert.match(CAMPAIGN_DEADLINE_NOTE, /December 31, 2026/);
-  assert.match(CAMPAIGN_DEADLINE_NOTE, /January 14, 2027/);
+  assert.match(CAMPAIGN_DEADLINE_NOTE, /December 31, 2026 at 11:59 p\.m\. Eastern Time/);
+  assert.match(CAMPAIGN_DEADLINE_NOTE, /January 14, 2027 at 11:59 p\.m\. Eastern Time/);
   assert.match(CAMPAIGN_DEADLINE_NOTE, /February 1, 2027/);
   assert.match(reservationStatusText("underpaid").detail, /gift card is valid/i);
   assert.match(reservationStatusText("underpaid").detail, /naming rights/);

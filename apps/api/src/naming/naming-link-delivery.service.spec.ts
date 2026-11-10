@@ -56,6 +56,7 @@ test("the naming message explains the link and the separate gift card", () => {
   assert.match(message.text, /naming rights/);
   assert.match(message.text, /Wheelbarrow/);
   assert.match(message.text, new RegExp(token));
+  assert.match(message.text, /January 14, 2027 at 11:59 p\.m\. Eastern Time/);
   assert.match(message.text, /Share that link/);
   assert.match(message.text, /FareHarbor delivers the gift card/);
 });

@@ -171,7 +171,8 @@ function NamingPage() {
                 </h2>
                 <p>
                   Submit <strong>{pendingName}</strong> for {link.objectName}?
-                  A name can be submitted once.
+                  Family-friendly names only. Our farm team reviews each one,
+                  and a name can be submitted once.
                 </p>
                 <div className="flex flex-wrap gap-3">
                   <Button
@@ -220,7 +221,9 @@ function NamingPage() {
                     onChange={(event) => setName(event.target.value)}
                   />
                   <p className="mt-2 text-sm text-body-copy">
-                    {name.length} / 40 characters
+                    {name.length} / 40 characters. Keep it family-friendly. Our
+                    farm team reviews each name, and a name can be submitted
+                    once.
                   </p>
                 </div>
                 <Button type="submit">Review name</Button>

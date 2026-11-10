@@ -31,7 +31,7 @@ export function namingLinkMessage(
     text: [
       `You have claimed naming rights for ${objectName} at Udderly Ridiculous.`,
       "",
-      "Use this private link to submit one name:",
+      "Use this private link to submit one name by January 14, 2027 at 11:59 p.m. Eastern Time:",
       url,
       "",
       "Share that link with the person who will receive the gift card. They open it and submit the name.",
