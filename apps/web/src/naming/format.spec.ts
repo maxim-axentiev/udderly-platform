@@ -4,6 +4,7 @@ import {
   availabilityLabel,
   CAMPAIGN_DEADLINE_NOTE,
   filterByPrice,
+  formatCatalogPrice,
   formatPrice,
   holdRemainingLabel,
   isFareharborCheckoutUrl,
@@ -19,6 +20,9 @@ const checkoutUrl =
 test("prices format as Canadian dollars and filter by exact cents", () => {
   assert.equal(formatPrice(2000, "CAD"), "$20.00");
   assert.equal(formatPrice(2500, "CAD"), "$25.00");
+  assert.equal(formatCatalogPrice(10_000), "$100");
+  assert.equal(formatCatalogPrice(100_000), "$1,000");
+  assert.equal(formatCatalogPrice(2550), "$25.50");
   const objects = [
     { name: "Gate", priceCents: 5000 },
     { name: "Shed", priceCents: 2000 },

@@ -22,6 +22,13 @@ export function formatPrice(cents: number, currency = "CAD"): string {
   }).format(cents / 100);
 }
 
+export function formatCatalogPrice(cents: number): string {
+  if (Number.isInteger(cents) && cents >= 0 && cents % 100 === 0) {
+    return `$${(cents / 100).toLocaleString("en-CA")}`;
+  }
+  return formatPrice(cents);
+}
+
 export function formatTimestamp(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {

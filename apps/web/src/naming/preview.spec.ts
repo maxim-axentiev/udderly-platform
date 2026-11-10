@@ -10,20 +10,31 @@ test("preview mode is on only for the exact true value", () => {
   assert.equal(isNamingPreviewMode("TRUE"), false);
 });
 
-test("preview catalog is three labelled sample objects with buying left off", () => {
+test("preview catalog uses the four campaign tiers and sample states", () => {
   assert.deepEqual(
-    previewObjects.map((object) => [object.name, object.priceCents]),
+    previewObjects.map((object) => [
+      object.name,
+      object.priceCents,
+      object.availability,
+    ]),
     [
-      ["Wheelbarrow", 10_000],
-      ["Poop Vacuum", 35_000],
-      ["Tractor", 50_000],
+      ["Blue Bucket", 10_000, "available"],
+      ["Goat Slide", 25_000, "held"],
+      ["Yellow Tractor", 50_000, "claimed"],
+      ["Goat Tower", 100_000, "available"],
     ],
   );
-  assert.equal(new Set(previewObjects.map((object) => object.id)).size, 3);
+  assert.equal(new Set(previewObjects.map((object) => object.id)).size, 4);
   for (const object of previewObjects) {
     assert.equal(object.photoUrl, null);
-    assert.equal(object.availability, "available");
     assert.match(object.description, /sample/i);
     assert.equal(object.id.startsWith("preview-"), true);
+    assert.equal(object.id.includes("-"), true);
+    assert.equal(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+        object.id,
+      ),
+      false,
+    );
   }
 });

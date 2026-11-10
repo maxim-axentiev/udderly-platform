@@ -21,29 +21,23 @@ export function NamingCertificate({
     <section
       id="naming-certificate"
       aria-label="Naming certificate"
-      className="border-2 border-stone-300 bg-white px-6 py-8 sm:px-10"
+      className="chunky-card rounded-3xl bg-farm-beige px-6 py-8 sm:px-10"
     >
-      <p className="text-sm uppercase tracking-[0.18em] text-stone-500">
+      <p className="font-display text-sm font-black uppercase tracking-[0.18em] text-primary-accent">
         Udderly Ridiculous
       </p>
-      <h2 className="mt-3 text-3xl font-semibold tracking-tight">
+      <h2 className="mt-3 font-display text-4xl font-black uppercase text-headline">
         Naming certificate
       </h2>
-      <p className="mt-6 text-lg">
-        <span className="text-stone-600">Name </span>
-        <span className="font-semibold">{submittedName}</span>
-      </p>
-      <p className="mt-2 text-lg">
-        <span className="text-stone-600">Object </span>
-        <span className="font-semibold">{objectName}</span>
-      </p>
+      <p className="mt-6 font-accent text-3xl text-headline">{submittedName}</p>
+      <p className="mt-2 text-lg text-body-copy">{objectName}</p>
       {description ? (
-        <p className="mt-4 max-w-prose text-stone-700">{description}</p>
+        <p className="mt-4 max-w-prose text-body-copy">{description}</p>
       ) : null}
-      <div className="mt-6 max-w-sm">
+      <div className="mt-6 max-w-sm overflow-hidden rounded-2xl border-2 border-headline">
         <ObjectPhoto src={photoUrl} name={objectName} />
       </div>
-      <p className="mt-8 text-sm text-stone-600">
+      <p className="mt-8 text-sm text-body-copy">
         This certificate records the name submitted for this object. This name
         is recognized at Udderly Ridiculous from February 1, 2027 through
         January 31, 2028.

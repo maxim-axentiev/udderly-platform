@@ -19,7 +19,7 @@ export function ObjectPhoto({
 
   if (!photoUrl || failed) {
     return (
-      <div className="flex aspect-[4/3] items-center justify-center bg-stone-200 px-4 text-center text-sm text-stone-600">
+      <div className="flex aspect-[4/3] items-center justify-center bg-farm-beige px-4 text-center font-display text-lg font-black uppercase text-headline/50">
         {emptyLabel}
         <span className="sr-only"> for {name}</span>
       </div>

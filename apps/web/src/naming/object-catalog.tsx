@@ -1,0 +1,92 @@
+import { useMemo, useState } from "react";
+
+import type { NamingObject } from "./api";
+import { cn } from "./cn";
+import { ObjectCard } from "./object-card";
+
+export const CAMPAIGN_TIERS = [10_000, 25_000, 50_000, 100_000] as const;
+
+function tierLabel(cents: number): string {
+  return `$${(cents / 100).toLocaleString("en-CA")}`;
+}
+
+export function ObjectCatalog({
+  objects,
+  purchasingEnabled,
+  pendingId,
+  onClaim,
+}: {
+  objects: NamingObject[];
+  purchasingEnabled: boolean;
+  pendingId: string | null;
+  onClaim: (objectId: string) => void;
+}) {
+  const [tier, setTier] = useState<number | "all">("all");
+  const visible = useMemo(
+    () =>
+      objects.filter((object) => tier === "all" || object.priceCents === tier),
+    [objects, tier],
+  );
+  const options: { value: number | "all"; label: string }[] = [
+    { value: "all", label: "All Objects" },
+    ...CAMPAIGN_TIERS.map((cents) => ({ value: cents, label: tierLabel(cents) })),
+  ];
+
+  return (
+    <div>
+      <div className="min-w-0 max-w-full">
+      <div
+        role="group"
+        aria-label="Filter objects by gift card tier"
+        className="flex max-w-full gap-2 overflow-x-auto pb-2 md:flex-wrap md:justify-center"
+      >
+        {options.map((option) => (
+          <button
+            key={option.label}
+            type="button"
+            aria-pressed={tier === option.value}
+            className={cn(
+              "min-h-12 shrink-0 rounded-full border-2 border-headline px-5 font-display text-lg font-extrabold uppercase transition",
+              tier === option.value
+                ? "bg-headline text-background"
+                : "bg-background text-headline hover:bg-secondary-accent",
+            )}
+            onClick={() => setTier(option.value)}
+          >
+            {option.label}
+            <span className="sr-only"> CAD</span>
+          </button>
+        ))}
+      </div>
+      {visible.length === 0 ? (
+        <div className="mx-auto mt-10 max-w-md rounded-2xl border-2 border-dashed border-headline/40 bg-background p-8 text-center">
+          <p className="font-display text-2xl font-black uppercase text-headline">
+            Nothing here (yet)
+          </p>
+          <p className="mt-2 text-body-copy">
+            No objects in this tier right now. Try another tier — or check back soon.
+          </p>
+        </div>
+      ) : (
+        <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          {visible.map((object) => (
+            <ObjectCard
+              key={object.id}
+              id={object.id}
+              name={object.name}
+              description={object.description}
+              photoUrl={object.photoUrl}
+              priceCents={object.priceCents}
+              currency={object.currency}
+              availability={object.availability}
+              purchasingEnabled={purchasingEnabled}
+              pending={pendingId === object.id}
+              onClaim={onClaim}
+            />
+          ))}
+        </div>
+      )}
+      </div>
+    </div>
+  );
+}

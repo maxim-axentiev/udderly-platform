@@ -1,11 +1,154 @@
 @import "tailwindcss";
 
+@theme inline {
+  --font-display: "Barlow Condensed", sans-serif;
+  --font-body: "DM Sans", sans-serif;
+  --font-accent: "Fraunces", serif;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-headline: var(--headline);
+  --color-body-copy: var(--body-copy);
+  --color-cta: var(--cta);
+  --color-cta-foreground: var(--cta-foreground);
+  --color-primary-accent: var(--primary-accent);
+  --color-secondary-accent: var(--secondary-accent);
+  --color-farm-beige: var(--farm-beige);
+  --color-farm-blue: var(--farm-blue);
+  --color-farm-silver: var(--farm-silver);
+  --color-farm-gold: var(--farm-gold);
+  --color-footer: var(--footer);
+  --color-footer-foreground: var(--footer-foreground);
+  --color-status-available: var(--status-available);
+  --color-status-held: var(--status-held);
+  --color-status-claimed: var(--status-claimed);
+}
+
+:root {
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.305 0.065 53.4);
+  --primary: oklch(0.567 0.232 353.7);
+  --primary-foreground: oklch(1 0 0);
+  --muted-foreground: oklch(0.44 0.05 53.4);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.305 0.065 53.4 / 18%);
+  --ring: oklch(0.784 0.127 204.2);
+  --headline: oklch(0.305 0.065 53.4);
+  --body-copy: oklch(0.36 0.045 53.4);
+  --cta: oklch(0.586 0.146 342.1);
+  --cta-foreground: oklch(1 0 0);
+  --primary-accent: oklch(0.567 0.232 353.7);
+  --secondary-accent: oklch(0.784 0.127 204.2);
+  --farm-beige: oklch(0.979 0.031 91.7);
+  --farm-blue: oklch(0.82 0.068 208.9);
+  --farm-silver: oklch(0.9 0 0);
+  --farm-gold: oklch(0.86 0.11 85.5);
+  --footer: oklch(0.2 0.008 220);
+  --footer-foreground: oklch(0.96 0.005 210);
+  --status-available: oklch(0.62 0.15 150);
+  --status-held: oklch(0.72 0.14 70);
+  --status-claimed: oklch(0.567 0.232 353.7);
+  --shadow-chunky: 6px 6px 0 var(--headline);
+}
+
+@layer base {
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-body), sans-serif;
+  }
+
+  main > section {
+    isolation: isolate;
+    position: relative;
+  }
+
+  main > section::before {
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 150 150' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.68' numOctaves='5' seed='8' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23grain)' opacity='.7'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 150px 150px;
+    content: "";
+    inset: 0;
+    opacity: 0.13;
+    pointer-events: none;
+    position: absolute;
+    z-index: 0;
+  }
+
+  main > section > * {
+    position: relative;
+    z-index: 1;
+  }
+}
+
+@utility photo-frame {
+  box-shadow: 10px 10px 0 var(--secondary-accent);
+}
+
+@utility photo-frame-pink {
+  box-shadow: 10px 10px 0 var(--primary-accent);
+}
+
+@utility chunky-card {
+  border: 2px solid var(--headline);
+  box-shadow: var(--shadow-chunky);
+}
+
+@utility held-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    color-mix(in oklab, var(--headline) 55%, transparent) 0 14px,
+    color-mix(in oklab, var(--headline) 35%, transparent) 14px 28px
+  );
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .gentle-float {
+    animation: gentle-float 5s ease-in-out infinite;
+  }
+
+  .stamp-in {
+    animation: stamp-in 0.5s cubic-bezier(0.2, 1.6, 0.4, 1) both;
+  }
+}
+
+@keyframes gentle-float {
+  0%,
+  100% {
+    transform: rotate(-4deg) translateY(0);
+  }
+  50% {
+    transform: rotate(-2deg) translateY(-8px);
+  }
+}
+
+@keyframes stamp-in {
+  from {
+    transform: rotate(-12deg) scale(1.6);
+    opacity: 0;
+  }
+  to {
+    transform: rotate(-12deg) scale(1);
+    opacity: 1;
+  }
+}
+
 @media print {
   body {
     background: white !important;
   }
 
-  .print-hidden {
+  .print-hidden,
+  .no-print {
     display: none !important;
+  }
+
+  main > section::before {
+    display: none;
   }
 }

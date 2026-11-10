@@ -1,4 +1,4 @@
-import { Link, createFileRoute } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   fetchReservation,
@@ -9,13 +9,14 @@ import {
 import { readCheckout, type StoredCheckout } from "../naming/checkout";
 import {
   CAMPAIGN_DEADLINE_NOTE,
-  formatPrice,
+  formatCatalogPrice,
   formatTimestamp,
   holdRemainingLabel,
   reservationStatusText,
 } from "../naming/format";
+import { CampaignFrame, JourneyPage } from "../naming/campaign-chrome";
+import { Button } from "../naming/button";
 import { ObjectPhoto } from "../naming/object-photo";
-import { CampaignShell } from "../naming/shell";
 
 export const Route = createFileRoute("/reservation/$id")({
   head: () => ({
@@ -96,97 +97,94 @@ function ReservationPage() {
     : null;
 
   return (
-    <CampaignShell>
-      <main className="mx-auto max-w-2xl px-6 py-12">
-        <p className="text-sm text-stone-500">
-          <Link to="/" className="underline">
+    <CampaignFrame>
+      <JourneyPage eyebrow="Name That Thing!" title="Reservation">
+        <p className="text-sm text-body-copy">{CAMPAIGN_DEADLINE_NOTE}</p>
+        <p>
+          <a href="/" className="font-display font-extrabold uppercase text-headline underline">
             All objects
-          </Link>
+          </a>
         </p>
-        <h1 className="mt-4 text-3xl font-semibold tracking-tight">
-          Reservation
-        </h1>
-        <p className="mt-4 text-sm text-stone-700">{CAMPAIGN_DEADLINE_NOTE}</p>
 
         {loading ? (
-          <p className="mt-6 text-stone-600" role="status">
+          <p className="text-body-copy" role="status">
             Checking reservation…
           </p>
         ) : null}
 
         {error ? (
-          <p role="alert" className="mt-6 text-stone-800">
+          <p role="alert" className="text-headline">
             {error}
           </p>
         ) : null}
 
         {reservation && status ? (
-          <div className="mt-6 space-y-6">
-            <article className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+          <div className="space-y-6">
+            <article className="chunky-card overflow-hidden rounded-3xl bg-background">
               <ObjectPhoto
                 src={reservation.object.photoUrl}
                 name={reservation.object.name}
               />
               <div className="space-y-2 p-5">
-                <h2 className="text-xl font-semibold">
+                <h2 className="font-display text-3xl font-black uppercase text-headline">
                   {reservation.object.name}
                 </h2>
                 {reservation.object.description ? (
-                  <p className="text-stone-600">
+                  <p className="text-body-copy">
                     {reservation.object.description}
                   </p>
                 ) : null}
-                <p>
-                  {formatPrice(
-                    reservation.object.priceCents,
-                    reservation.object.currency,
-                  )}{" "}
+                <p className="font-display text-xl font-extrabold text-primary-accent">
+                  {formatCatalogPrice(reservation.object.priceCents)}{" "}
                   gift card
                 </p>
               </div>
             </article>
 
             <section aria-live="polite" className="space-y-3">
-              <h2 className="text-xl font-semibold">{status.heading}</h2>
-              <p className="text-stone-700">{status.detail}</p>
+              <h2 className="font-display text-3xl font-black uppercase text-headline">
+                {status.heading}
+              </h2>
+              <p className="text-body-copy">{status.detail}</p>
               {reservation.status === "awaiting_payment" &&
               reservation.holdExpiresAt ? (
                 <>
                   <p>Hold ends {formatTimestamp(reservation.holdExpiresAt)}</p>
-                  <p className="text-stone-600">
+                  <p className="text-body-copy">
                     {holdRemainingLabel(reservation.holdExpiresAt)}
                   </p>
                 </>
               ) : null}
               {reservation.status === "awaiting_payment" && checkout ? (
                 <p>
-                  <a
-                    href={checkout.checkoutUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-block rounded bg-stone-900 px-4 py-2 text-white"
-                  >
-                    Continue to FareHarbor checkout
-                  </a>
+                  <Button asChild>
+                    <a
+                      href={checkout.checkoutUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Continue to FareHarbor checkout
+                    </a>
+                  </Button>
                 </p>
               ) : null}
               {reservation.status === "awaiting_payment" && !checkout ? (
-                <p className="text-stone-600">
+                <p className="text-body-copy">
                   The checkout link is kept in the browser tab that created
                   this reservation.
                 </p>
               ) : null}
-              <button
+              <Button
                 type="button"
-                className="rounded border border-stone-300 bg-white px-4 py-2"
+                variant="outline"
                 onClick={() => void checkStatus()}
               >
                 Check payment status
-              </button>
+              </Button>
             </section>
           </div>
         ) : null}
-      </main>
-    </CampaignShell>
+      </JourneyPage>
+    </CampaignFrame>
   );
 }
