@@ -85,6 +85,27 @@
       "when": 1789508000000,
       "tag": "0011_mailchimp",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1789509000000,
+      "tag": "0012_naming",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1789510000000,
+      "tag": "0013_naming_link_delivery",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1789511000000,
+      "tag": "0014_naming_campaign_rules",
+      "breakpoints": true
     }
   ]
 }

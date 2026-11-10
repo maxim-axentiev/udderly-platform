@@ -11,6 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as HealthRouteImport } from './routes/health'
+import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as NameTokenRouteImport } from './routes/name.$token'
+import { Route as ReservationIdRouteImport } from './routes/reservation.$id'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -22,31 +25,65 @@ const HealthRoute = HealthRouteImport.update({
   path: '/health',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NameTokenRoute = NameTokenRouteImport.update({
+  id: '/name/$token',
+  path: '/name/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReservationIdRoute = ReservationIdRouteImport.update({
+  id: '/reservation/$id',
+  path: '/reservation/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
+  '/inventory': typeof InventoryRoute
+  '/name/$token': typeof NameTokenRoute
+  '/reservation/$id': typeof ReservationIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
+  '/inventory': typeof InventoryRoute
+  '/name/$token': typeof NameTokenRoute
+  '/reservation/$id': typeof ReservationIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/health': typeof HealthRoute
+  '/inventory': typeof InventoryRoute
+  '/name/$token': typeof NameTokenRoute
+  '/reservation/$id': typeof ReservationIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/health'
+  fullPaths:
+    '/' | '/health' | '/inventory' | '/name/$token' | '/reservation/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/health'
-  id: '__root__' | '/' | '/health'
+  to: '/' | '/health' | '/inventory' | '/name/$token' | '/reservation/$id'
+  id:
+    | '__root__'
+    | '/'
+    | '/health'
+    | '/inventory'
+    | '/name/$token'
+    | '/reservation/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HealthRoute: typeof HealthRoute
+  InventoryRoute: typeof InventoryRoute
+  NameTokenRoute: typeof NameTokenRoute
+  ReservationIdRoute: typeof ReservationIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -65,12 +102,36 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HealthRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/name/$token': {
+      id: '/name/$token'
+      path: '/name/$token'
+      fullPath: '/name/$token'
+      preLoaderRoute: typeof NameTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reservation/$id': {
+      id: '/reservation/$id'
+      path: '/reservation/$id'
+      fullPath: '/reservation/$id'
+      preLoaderRoute: typeof ReservationIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HealthRoute: HealthRoute,
+  InventoryRoute: InventoryRoute,
+  NameTokenRoute: NameTokenRoute,
+  ReservationIdRoute: ReservationIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

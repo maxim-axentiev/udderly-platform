@@ -1,6 +1,7 @@
 import { BullModule } from "@nestjs/bullmq";
 import { Module } from "@nestjs/common";
 import { DatabaseModule } from "../../database/database.module";
+import { NamingModule } from "../../naming/naming.module";
 import { QueueModule } from "../../queue/queue.module";
 import { FAREHARBOR_WEBHOOK_QUEUE } from "../../queue/queue.constants";
 import {
@@ -19,6 +20,7 @@ import { FareharborReportItemClassifyService } from "./fareharbor-report-item-cl
   imports: [
     DatabaseModule,
     QueueModule,
+    NamingModule,
     BullModule.registerQueue({
       name: FAREHARBOR_WEBHOOK_QUEUE,
     }),

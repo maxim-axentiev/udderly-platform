@@ -22,3 +22,5 @@ Thumbs.db
 !/.vscode/extensions.json
 .local/
 imports/protected/
+# Campaign photographs and the local review package stay off Git and out of images.
+assets/gift-card-campaign/

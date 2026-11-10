@@ -4,6 +4,7 @@ import {
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
@@ -15,6 +16,8 @@ import {
   integrationEvents,
   recoverableIntegrationEventStatuses,
 } from "../../database/schema/integration-events";
+import { NamingGiftCardDispatchService } from "../../naming/naming-gift-card.dispatch";
+import { isFareharborGiftCardItem } from "../../naming/naming-gift-card";
 import { FAREHARBOR_WEBHOOK_QUEUE } from "../../queue/queue.constants";
 import {
   FAREHARBOR_BOOKING_ENTITY,
@@ -33,6 +36,9 @@ export class FareharborWebhookService {
     @Inject(EnvService) private readonly env: EnvService,
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @InjectQueue(FAREHARBOR_WEBHOOK_QUEUE) private readonly queue: Queue,
+    @Optional()
+    @Inject(NamingGiftCardDispatchService)
+    private readonly namingGifts?: NamingGiftCardDispatchService,
   ) {}
 
   get configured(): boolean {
@@ -83,6 +89,21 @@ export class FareharborWebhookService {
       } catch {
         this.logger.warn(
           "FareHarbor event persisted; queueing failed. Recover with npm run integrations:recover.",
+        );
+      }
+    }
+
+    if (isFareharborGiftCardItem(body)) {
+      try {
+        const queued = await this.namingGifts?.enqueueEvent(persisted.eventId);
+        if (!this.namingGifts || queued === "failed") {
+          this.logger.warn(
+            "Gift-card event persisted; naming match was not queued. Recover with npm run naming:match-gifts.",
+          );
+        }
+      } catch {
+        this.logger.warn(
+          "Gift-card event persisted; naming match was not queued. Recover with npm run naming:match-gifts.",
         );
       }
     }

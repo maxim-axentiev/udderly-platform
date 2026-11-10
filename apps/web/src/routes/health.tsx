@@ -1,5 +1,6 @@
 import { Link, createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { apiBaseUrl } from "../naming/api";
 
 export const Route = createFileRoute("/health")({
   component: HealthPage,
@@ -14,7 +15,12 @@ function HealthPage() {
   const [detail, setDetail] = useState<string>("");
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+    const apiUrl = apiBaseUrl();
+    if (!apiUrl) {
+      setApiHealth("same-origin /naming");
+      setDetail("");
+      return;
+    }
 
     void fetch(`${apiUrl}/health`)
       .then(async (response) => {

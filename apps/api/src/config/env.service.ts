@@ -157,4 +157,55 @@ export class EnvService {
   get isMailchimpConfigured(): boolean {
     return Boolean(this.mailchimp);
   }
+
+  get namingCampaignEnabled(): boolean {
+    return this.env.NAMING_CAMPAIGN_ENABLED;
+  }
+
+  get namingAdmin():
+    | { password: string; sessionSecret: string }
+    | undefined {
+    const password = this.env.NAMING_ADMIN_PASSWORD;
+    const sessionSecret = this.env.NAMING_ADMIN_SESSION_SECRET;
+    if (!password || !sessionSecret) {
+      return undefined;
+    }
+    return { password, sessionSecret };
+  }
+
+  get namingPhotoDir(): string {
+    return this.env.NAMING_PHOTO_DIR ?? "/data/naming-photos";
+  }
+
+  get namingResend():
+    | { apiKey: string; from: string; replyTo: string }
+    | undefined {
+    const apiKey = this.env.RESEND_API_KEY;
+    const from = this.env.RESEND_FROM;
+    const replyTo = this.env.RESEND_REPLY_TO;
+    if (!apiKey || !from || !replyTo) {
+      return undefined;
+    }
+    return { apiKey, from, replyTo };
+  }
+
+  get namingSmtp():
+    | { user: string; appPassword: string; from: string }
+    | undefined {
+    const user = this.env.SMTP_USER;
+    const appPassword = this.env.SMTP_APP_PASSWORD;
+    const from = this.env.SMTP_FROM;
+    if (!user || !appPassword || !from) {
+      return undefined;
+    }
+    return { user, appPassword, from };
+  }
+
+  get namingMailConfigured(): boolean {
+    return Boolean(this.namingResend || this.namingSmtp);
+  }
+
+  get namingPublicBaseUrl(): string | undefined {
+    return this.env.NAMING_PUBLIC_BASE_URL;
+  }
 }

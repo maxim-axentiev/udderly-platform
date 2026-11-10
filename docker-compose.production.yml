@@ -1,11 +1,14 @@
-# Production stack for the Udderly Platform API only (no frontend).
+# Production stack for the Udderly Platform API and gift-card campaign site.
 # Project name: udderly-platform-production
 #
 # Traefik is NOT defined here. It already runs under /opt/traefik and
-# discovers this API via the external Docker network `web`.
+# discovers containers on the external Docker network `web`.
 #
-# Temporary public routing: goatbarn.udderlyridiculousfarmlife.com → API.
-# The unfinished web app is not deployed (no authentication yet).
+# goatbarn.udderlyridiculousfarmlife.com → API (unchanged, no campaign password).
+# giftcard.udderlyridiculousfarmlife.com → campaign site, still behind Basic Auth.
+# /naming, /inventory/, and /photos/ go to this API ahead of the website.
+# /naming keeps Basic Auth. /inventory/ and /photos/ do not, so staff
+# sessions and published photographs work. The page /inventory stays on the website.
 
 name: udderly-platform-production
 
@@ -102,6 +105,19 @@ services:
       META_ADS_ACCOUNT_ID: ${META_ADS_ACCOUNT_ID:-}
       META_ADS_ACCESS_TOKEN: ${META_ADS_ACCESS_TOKEN:-}
       MAILCHIMP_API_KEY: ${MAILCHIMP_API_KEY:-}
+      NAMING_CAMPAIGN_ENABLED: ${NAMING_CAMPAIGN_ENABLED:-false}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-}
+      RESEND_REPLY_TO: ${RESEND_REPLY_TO:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_APP_PASSWORD: ${SMTP_APP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      NAMING_PUBLIC_BASE_URL: ${NAMING_PUBLIC_BASE_URL:-}
+      NAMING_ADMIN_PASSWORD: ${NAMING_ADMIN_PASSWORD:-}
+      NAMING_ADMIN_SESSION_SECRET: ${NAMING_ADMIN_SESSION_SECRET:-}
+      NAMING_PHOTO_DIR: /data/naming-photos
+    volumes:
+      - naming_photos:/data/naming-photos
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,6 +147,63 @@ services:
       - traefik.http.routers.udderly-platform-production.tls=true
       - traefik.http.routers.udderly-platform-production.tls.certresolver=letsencrypt
       - traefik.http.services.udderly-platform-production.loadbalancer.server.port=${API_PORT:-3001}
+      - traefik.http.middlewares.giftcard-auth.basicauth.realm=Udderly gift card
+      - traefik.http.middlewares.giftcard-auth.basicauth.users=${GIFT_CARD_BASIC_AUTH:-}
+      - traefik.http.routers.giftcard-naming.rule=Host(`giftcard.udderlyridiculousfarmlife.com`) && PathPrefix(`/naming`)
+      - traefik.http.routers.giftcard-naming.priority=100
+      - traefik.http.routers.giftcard-naming.entrypoints=websecure
+      - traefik.http.routers.giftcard-naming.tls=true
+      - traefik.http.routers.giftcard-naming.tls.certresolver=letsencrypt
+      - traefik.http.routers.giftcard-naming.service=udderly-platform-production
+      - traefik.http.routers.giftcard-naming.middlewares=giftcard-auth
+      - traefik.http.routers.giftcard-inventory.rule=Host(`giftcard.udderlyridiculousfarmlife.com`) && PathPrefix(`/inventory/`)
+      - traefik.http.routers.giftcard-inventory.priority=100
+      - traefik.http.routers.giftcard-inventory.entrypoints=websecure
+      - traefik.http.routers.giftcard-inventory.tls=true
+      - traefik.http.routers.giftcard-inventory.tls.certresolver=letsencrypt
+      - traefik.http.routers.giftcard-inventory.service=udderly-platform-production
+      - traefik.http.routers.giftcard-photos.rule=Host(`giftcard.udderlyridiculousfarmlife.com`) && PathPrefix(`/photos/`)
+      - traefik.http.routers.giftcard-photos.priority=100
+      - traefik.http.routers.giftcard-photos.entrypoints=websecure
+      - traefik.http.routers.giftcard-photos.tls=true
+      - traefik.http.routers.giftcard-photos.tls.certresolver=letsencrypt
+      - traefik.http.routers.giftcard-photos.service=udderly-platform-production
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    image: udderly-platform-web:production
+    pull_policy: never
+    container_name: udderly-platform-production-web
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      # Temporary private preview. Does not enable purchases or the naming API.
+      NAMING_PREVIEW_MODE: ${NAMING_PREVIEW_MODE:-true}
+    networks:
+      - web
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"fetch('http://127.0.0.1:3000/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\"",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=web
+      - traefik.http.routers.giftcard-web.rule=Host(`giftcard.udderlyridiculousfarmlife.com`)
+      - traefik.http.routers.giftcard-web.priority=1
+      - traefik.http.routers.giftcard-web.entrypoints=websecure
+      - traefik.http.routers.giftcard-web.tls=true
+      - traefik.http.routers.giftcard-web.tls.certresolver=letsencrypt
+      - traefik.http.routers.giftcard-web.middlewares=giftcard-auth
+      - traefik.http.services.giftcard-web.loadbalancer.server.port=3000
 
 networks:
   internal:
@@ -145,3 +218,5 @@ volumes:
     name: udderly-platform-production-postgres-data
   redis_data:
     name: udderly-platform-production-redis-data
+  naming_photos:
+    name: udderly-platform-production-naming-photos

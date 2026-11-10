@@ -1,6 +1,6 @@
 # Operational schema (Phase 1)
 
-PostgreSQL tables from migrations `0002_operational_core` through `0011_mailchimp`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Google Analytics, Google Search Console, Meta Ads, and Mailchimp ingest are **manual** bounded CLIs. Design: `docs/data-model.md`.
+PostgreSQL tables from migrations `0002_operational_core` through `0012_naming`. FareHarbor webhooks fill `integration_events` only. Wherewolf pulls fill `source_snapshot` (sanitized). FareHarbor Booking details CSVs are **not** stored. Square catalog and Square commerce ingest are **manual** two-step commands. Google Analytics, Google Search Console, Meta Ads, and Mailchimp ingest are **manual** bounded CLIs. Design: `docs/data-model.md`.
 
 ## Tables
 
@@ -57,6 +57,8 @@ PostgreSQL tables from migrations `0002_operational_core` through `0011_mailchim
 | `mailchimp_campaign` | Sent Mailchimp campaign metadata |
 | `mailchimp_campaign_report` | Current campaign report totals |
 | `mailchimp_campaign_link` | Aggregate clicks per campaign URL |
+| `naming_object` | Gift-card naming inventory. Unpublished while `published_at` is null |
+| `naming_reservation` | One checkout attempt: hold, release, claim, or review |
 
 Plus existing `platform_meta` and `integration_events`.
 
@@ -188,6 +190,18 @@ npm run map:wherewolf-experience -- --activity-id <id> --experience-id <uuid>
 ```
 
 Rows use `provider = wherewolf`, `provider_object_type = activity`, `external_id` = activity id as text from `activitiesAsObjects.id` or guest `activities` string ids.
+
+## Naming campaign
+
+Migration `0012_naming`. These tables are separate from `booking`, `sale`, and `payment`. The gift-card matcher reads a stored FareHarbor payload from a separate queue. The FareHarbor inbox processor still only marks the webhook completed.
+
+`naming_object.price_amount` and `naming_reservation.price_amount` / `paid_amount` are CAD integer minor units. `currency` must be `CAD`. A new object has `published_at` null and `status` `available`. `photo_url` is either an `http`/`https` address or a `/photos/{object-id}.jpg|png|webp` path. The file lives on the naming-photos volume, not in PostgreSQL.
+
+`naming_reservation.checkout_ref` is unique. `fareharbor_booking_uuid` is unique. `naming_token_hash` is the only naming secret. It stays null until a naming link is issued with `npm run naming:link`, and then it must be a lowercase hex SHA-256. The plaintext token is not stored. One partial unique index allows a single active hold per object: `status = held`, or `status = needs_review` with `released_at` null. Another allows one `claimed` reservation. Holder ids on the object reference that reservation and that same object.
+
+`needs_review` cannot store a naming token or submitted name. With `released_at` null it still holds the object, and it must have `hold_expires_at` unless `admin_resolution_required` is true. With `released_at` set, the object is free and the booking UUID, paid amount, and review reason remain. `payment_reversed` is allowed on `needs_review` when a refund arrives before a claim, and on `claimed` when a later refund must not remove the claim. `admin_resolution_required` defaults to false. The expiry index omits review holds that require an administrator.
+
+Purchaser email is not copied onto these tables. `link_delivery_status` is null, `sending`, `failed`, or `sent`. `sending` and `failed` require a null `naming_token_hash`. `sent` requires the hash. The plaintext token is never stored. SMTP acceptance followed by a lost hash commit leaves `sending` with a null hash, or `failed` after the worker records `uncommitted`. No link is active. `npm run naming:deliver` sends a replacement after 90 seconds for a stale `sending` row, or immediately for `failed` / `uncommitted`. An earlier message from that attempt will not resolve. Delivery is not exactly once. Public naming routes stay disabled unless `NAMING_CAMPAIGN_ENABLED=true`.
 
 ## Foreign keys
 

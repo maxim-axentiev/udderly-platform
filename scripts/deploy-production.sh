@@ -179,6 +179,8 @@ wait_for_condition "API readiness (GET /health/ready)" api_readiness_ok
 log "API is ready."
 
 log "Deploy finished."
-log "Public hostname (API only): https://goatbarn.udderlyridiculousfarmlife.com"
+log "Public hostname (API): https://goatbarn.udderlyridiculousfarmlife.com"
+log "Gift-card site is not started by this script."
+log "After GIFT_CARD_BASIC_AUTH is set, start it with: docker compose -f docker-compose.production.yml up -d web"
 log "Liveness:  GET /health"
 log "Readiness: GET /health/ready"

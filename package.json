@@ -94,7 +94,18 @@
     "increment:mailchimp": "npm run increment:mailchimp -w @udderly/api --",
     "increment:mailchimp:dev": "npm run increment:mailchimp:dev -w @udderly/api --",
     "test:mailchimp-db": "npm run test:mailchimp-db -w @udderly/api",
-    "test:mailchimp": "npm run test:mailchimp -w @udderly/api"
+    "test:mailchimp": "npm run test:mailchimp -w @udderly/api",
+    "test:naming-schema": "npm run test:naming-schema -w @udderly/api",
+    "naming:object": "npm run naming:object -w @udderly/api --",
+    "naming:object:dev": "npm run naming:object:dev -w @udderly/api --",
+    "naming:match-gifts": "npm run naming:match-gifts -w @udderly/api --",
+    "naming:match-gifts:dev": "npm run naming:match-gifts:dev -w @udderly/api --",
+    "naming:link": "npm run naming:link -w @udderly/api --",
+    "naming:link:dev": "npm run naming:link:dev -w @udderly/api --",
+    "naming:deliver": "npm run naming:deliver -w @udderly/api --",
+    "naming:deliver:dev": "npm run naming:deliver:dev -w @udderly/api --",
+    "naming:import-inventory": "npm run naming:import-inventory -w @udderly/api --",
+    "naming:import-inventory:dev": "npm run naming:import-inventory:dev -w @udderly/api --"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",

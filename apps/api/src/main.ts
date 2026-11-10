@@ -14,6 +14,7 @@ async function bootstrap(): Promise<void> {
   });
 
   app.useBodyParser("json", { limit: "2mb" });
+  app.set("trust proxy", 1);
 
   const env = app.get(EnvService);
 

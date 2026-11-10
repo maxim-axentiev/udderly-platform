@@ -1,4 +1,4 @@
-# Production deployment (API only)
+# Production deployment
 
 This document is for the **Udderly Platform** on the existing DigitalOcean Droplet. It is separate from the public Udderly website.
 
@@ -13,11 +13,22 @@ Internet
       → Udderly Platform API (NestJS)
         → PostgreSQL 16 (private Docker network only)
         → Redis 7 (private Docker network only)
+    → giftcard.udderlyridiculousfarmlife.com
+      → campaign website, except /naming
+      → /naming goes to the same API
 ```
 
-The unfinished frontend (`apps/web`) is **not** deployed. There is no authentication yet. The hostname currently serves the API only.
+The campaign website container joins only the external `web` network. It does not join the internal database network and publishes no host ports. `scripts/deploy-production.sh` still migrates and restarts only the API. Start the website separately after `GIFT_CARD_BASIC_AUTH` is set:
 
-Later, this hostname may serve the private Goat Barn UI plus the API. Do not expose business-data endpoints until authentication exists.
+```bash
+docker compose -f docker-compose.production.yml up -d web
+```
+
+Leave `NAMING_CAMPAIGN_ENABLED=false` until launch. Production naming email uses Resend over HTTPS. Set `RESEND_API_KEY`, `RESEND_FROM`, `RESEND_REPLY_TO`, and `NAMING_PUBLIC_BASE_URL` together, or leave them empty. `RESEND_FROM` is an address on the verified sending domain. `RESEND_REPLY_TO` is the marketing mailbox. Gmail SMTP remains the local fallback: `SMTP_USER`, `SMTP_APP_PASSWORD`, and `SMTP_FROM` are all set or all empty. When both are set, Resend is used. `NAMING_PUBLIC_BASE_URL` is `https://giftcard.udderlyridiculousfarmlife.com`. `NAMING_PREVIEW_MODE=true` on the website container shows sample objects only. It does not enable purchases or the naming API. The browser calls `/naming` on that same hostname.
+
+`goatbarn.udderlyridiculousfarmlife.com` serves the API only. The gift-card campaign is a separate hostname, `giftcard.udderlyridiculousfarmlife.com`, with HTTP Basic Auth on the site and its `/naming` routes. Goat Barn's hostname has no campaign password. Do not expose business-data endpoints on the gift-card hostname.
+
+Staff inventory is `https://giftcard.udderlyridiculousfarmlife.com/inventory`. The page is served by the website. `/inventory/` and `/photos/` are routed to the API and do not use the campaign Basic Auth middleware. The API requires `NAMING_ADMIN_PASSWORD` and `NAMING_ADMIN_SESSION_SECRET` together; if either is missing, inventory administration stays closed. Purchasing stays off until `NAMING_CAMPAIGN_ENABLED=true`. The website page is still behind the existing site Basic Auth until that middleware is removed at launch. Public `/photos/{object-id}.jpg|png|webp` serves a photograph only while that object is published. Staff preview the same file at `/inventory/photos/…`, which requires the inventory session. The session cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, and `Path=/inventory`. Reloading the page issues a new CSRF token for the same 12-hour session. Logout applies to the running API process.
 
 ## Server layout
 
@@ -25,6 +36,8 @@ Later, this hostname may serve the private Goat Barn UI plus the API. Do not exp
 | --- | --- |
 | Suggested checkout | `/opt/projects/udderly-platform` |
 | Hostname | `goatbarn.udderlyridiculousfarmlife.com` |
+| Campaign hostname | `giftcard.udderlyridiculousfarmlife.com` |
+| Campaign image | `udderly-platform-web:production` |
 | Existing Traefik network | `web` (external) |
 | Compose project | `udderly-platform-production` |
 | API image | `udderly-platform-api:production` |
@@ -158,8 +171,9 @@ cd /opt/projects/udderly-platform
 # Restart API only
 docker compose -f docker-compose.production.yml restart api
 
-# Stop API, Postgres, and Redis for this project only
-docker compose -f docker-compose.production.yml stop
+# Stop API, Postgres, and Redis for this project only.
+# This does not stop the gift-card website.
+docker compose -f docker-compose.production.yml stop api postgres redis
 
 # Start them again
 docker compose -f docker-compose.production.yml up -d postgres redis
@@ -211,8 +225,26 @@ Postgres and Redis must **not** appear on network `web`.
 
 - PostgreSQL data: Docker volume `udderly-platform-production-postgres-data`
 - Redis AOF (`appendonly yes`, `appendfsync everysec`): volume `udderly-platform-production-redis-data`
+- Naming photographs: Docker volume `udderly-platform-production-naming-photos`, mounted at `/data/naming-photos` in the API container
 
-Redis persistence exists so BullMQ jobs can survive container restarts. **PostgreSQL is the durable source of truth** for FareHarbor inbox events. Redis is not the primary event store.
+Redis persistence exists so BullMQ jobs can survive container restarts. **PostgreSQL is the durable source of truth** for FareHarbor inbox events. Redis is not the primary event store. Photograph files are not in PostgreSQL. `naming_object.photo_url` only stores the public path.
+
+The API container runs as uid 1000. Before the first upload, make the new volume writable by that user:
+
+```bash
+docker run --rm -v udderly-platform-production-naming-photos:/data alpine chown 1000:1000 /data
+```
+
+Back up the photograph files with the volume, separately from `pg_dump`:
+
+```bash
+docker run --rm \
+  -v udderly-platform-production-naming-photos:/data:ro \
+  -v /var/backups/udderly-platform:/backup \
+  alpine tar czf /backup/naming-photos-$(date -u +%Y%m%dT%H%M%SZ).tgz -C /data .
+```
+
+Restore only when the API is stopped, into the same volume, then start the API again. Do not use `docker compose down -v`; that deletes the volume. A restore replaces the files, and the database paths keep working when the file names still match the object ids. After restoring, repeat the `chown 1000:1000` command if the files are not owned by uid 1000.
 
 ## Networks
 

@@ -65,3 +65,9 @@ export {
   mailchimpCampaignReports,
   mailchimpCampaignLinks,
 } from "./mailchimp";
+export {
+  namingObjects,
+  namingReservations,
+  namingNotices,
+  namingNameRevisions,
+} from "./naming";

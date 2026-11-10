@@ -86,7 +86,18 @@
     "increment:mailchimp": "node dist/integrations/mailchimp/increment-mailchimp.cli.js",
     "increment:mailchimp:dev": "tsx src/integrations/mailchimp/increment-mailchimp.cli.ts",
     "test:mailchimp-db": "tsx src/integrations/mailchimp/test-mailchimp-db.cli.ts",
-    "test:mailchimp": "tsx --test src/database/advisory-lock.spec.ts src/integrations/mailchimp/mailchimp.client.spec.ts src/integrations/mailchimp/mailchimp.sanitize.spec.ts src/integrations/mailchimp/mailchimp.normalize.spec.ts src/integrations/mailchimp/mailchimp.quality.spec.ts src/integrations/mailchimp/mailchimp.coverage.spec.ts src/integrations/mailchimp/mailchimp.reconcile.spec.ts src/integrations/mailchimp/mailchimp.replace.spec.ts src/integrations/mailchimp/mailchimp.range.spec.ts src/integrations/mailchimp/mailchimp.import-plan.spec.ts src/integrations/mailchimp/mailchimp.errors.spec.ts src/integrations/mailchimp/mailchimp.incremental.spec.ts"
+    "test:mailchimp": "tsx --test src/database/advisory-lock.spec.ts src/integrations/mailchimp/mailchimp.client.spec.ts src/integrations/mailchimp/mailchimp.sanitize.spec.ts src/integrations/mailchimp/mailchimp.normalize.spec.ts src/integrations/mailchimp/mailchimp.quality.spec.ts src/integrations/mailchimp/mailchimp.coverage.spec.ts src/integrations/mailchimp/mailchimp.reconcile.spec.ts src/integrations/mailchimp/mailchimp.replace.spec.ts src/integrations/mailchimp/mailchimp.range.spec.ts src/integrations/mailchimp/mailchimp.import-plan.spec.ts src/integrations/mailchimp/mailchimp.errors.spec.ts src/integrations/mailchimp/mailchimp.incremental.spec.ts",
+    "test:naming-schema": "tsx --test src/database/naming.schema.spec.ts src/naming/naming-deadline.spec.ts src/naming/naming-campaign.rules.spec.ts src/naming/naming-object.command.spec.ts src/naming/naming-object.service.spec.ts src/naming/naming-reservation.service.spec.ts src/naming/naming-gift-card.service.spec.ts src/naming/naming-gift-card.dispatch.spec.ts src/naming/naming-link.command.spec.ts src/naming/naming-link.service.spec.ts src/naming/naming-link-delivery.command.spec.ts src/naming/naming-link-delivery.service.spec.ts src/naming/naming-mailer.spec.ts src/naming/naming-public.controller.spec.ts src/naming/naming-inventory.controller.spec.ts src/naming/naming-inventory-import.spec.ts src/integrations/fareharbor/fareharbor-webhook.service.spec.ts",
+    "naming:object": "node dist/naming/naming-object.cli.js",
+    "naming:object:dev": "tsx src/naming/naming-object.cli.ts",
+    "naming:match-gifts": "node dist/naming/naming-gift-card.cli.js",
+    "naming:match-gifts:dev": "tsx src/naming/naming-gift-card.cli.ts",
+    "naming:link": "node dist/naming/naming-link.cli.js",
+    "naming:link:dev": "tsx src/naming/naming-link.cli.ts",
+    "naming:deliver": "node dist/naming/naming-link-delivery.cli.js",
+    "naming:deliver:dev": "tsx src/naming/naming-link-delivery.cli.ts",
+    "naming:import-inventory": "node dist/naming/naming-inventory-import.cli.js",
+    "naming:import-inventory:dev": "tsx src/naming/naming-inventory-import.cli.ts"
   },
   "dependencies": {
     "@nestjs/bullmq": "^11.0.3",
@@ -96,19 +107,21 @@
     "@udderly/shared": "*",
     "bullmq": "^5.58.5",
     "dotenv": "^17.2.2",
+    "drizzle-kit": "^0.31.4",
     "drizzle-orm": "^0.44.5",
     "ioredis": "^5.7.0",
+    "nodemailer": "^10.3.1",
     "postgres": "^3.4.7",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
-    "zod": "^3.25.76",
-    "drizzle-kit": "^0.31.4"
+    "zod": "^3.25.76"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",
     "@nestjs/schematics": "^11.0.7",
     "@types/express": "^5.0.3",
     "@types/node": "^22.18.1",
+    "@types/nodemailer": "^8.0.2",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   }

@@ -11,6 +11,7 @@ import { GoogleAnalyticsModule } from "./integrations/google-analytics/google-an
 import { GoogleSearchConsoleModule } from "./integrations/google-search-console/google-search-console.module";
 import { MetaAdsModule } from "./integrations/meta-ads/meta-ads.module";
 import { MailchimpModule } from "./integrations/mailchimp/mailchimp.module";
+import { NamingModule } from "./naming/naming.module";
 import { QueueModule } from "./queue/queue.module";
 import { RedisModule } from "./redis/redis.module";
 
@@ -28,6 +29,7 @@ import { RedisModule } from "./redis/redis.module";
     GoogleSearchConsoleModule,
     MetaAdsModule,
     MailchimpModule,
+    NamingModule,
   ],
 })
 export class AppModule implements NestModule {

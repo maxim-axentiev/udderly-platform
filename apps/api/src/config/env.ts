@@ -40,7 +40,101 @@ const envSchema = z.object({
   META_ADS_ACCOUNT_ID: optionalTrimmedSecret,
   META_ADS_ACCESS_TOKEN: optionalTrimmedSecret,
   MAILCHIMP_API_KEY: optionalTrimmedSecret,
+  RESEND_API_KEY: optionalTrimmedSecret,
+  RESEND_FROM: optionalTrimmedSecret,
+  RESEND_REPLY_TO: optionalTrimmedSecret,
+  SMTP_USER: optionalTrimmedSecret,
+  SMTP_APP_PASSWORD: optionalTrimmedSecret,
+  SMTP_FROM: optionalTrimmedSecret,
+  NAMING_PUBLIC_BASE_URL: z.preprocess((value) => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().url().optional()),
+  NAMING_ADMIN_PASSWORD: optionalBoundedSecret(12),
+  NAMING_ADMIN_SESSION_SECRET: optionalBoundedSecret(32),
+  NAMING_PHOTO_DIR: optionalTrimmedSecret,
+  NAMING_CAMPAIGN_ENABLED: z
+    .preprocess((value) => {
+      if (value === undefined || value === "") {
+        return "false";
+      }
+      return value;
+    }, z.enum(["true", "false"]))
+    .transform((value) => value === "true"),
+}).superRefine((value, context) => {
+  requireTogether(
+    context,
+    [value.NAMING_ADMIN_PASSWORD, value.NAMING_ADMIN_SESSION_SECRET],
+    "NAMING_ADMIN_PASSWORD",
+    "NAMING_ADMIN_PASSWORD and NAMING_ADMIN_SESSION_SECRET must be set together",
+  );
+  requireTogether(
+    context,
+    [value.RESEND_API_KEY, value.RESEND_FROM, value.RESEND_REPLY_TO],
+    "RESEND_API_KEY",
+    "RESEND_API_KEY, RESEND_FROM, and RESEND_REPLY_TO must be set together",
+  );
+  requireTogether(
+    context,
+    [value.SMTP_USER, value.SMTP_APP_PASSWORD, value.SMTP_FROM],
+    "SMTP_USER",
+    "SMTP_USER, SMTP_APP_PASSWORD, and SMTP_FROM must be set together",
+  );
+  if (value.RESEND_FROM && !isSenderAddress(value.RESEND_FROM)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["RESEND_FROM"],
+      message: "RESEND_FROM must be an email address on the verified domain",
+    });
+  }
+  if (value.RESEND_REPLY_TO && !isMailbox(value.RESEND_REPLY_TO)) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["RESEND_REPLY_TO"],
+      message: "RESEND_REPLY_TO must be an email address",
+    });
+  }
 });
+
+function optionalBoundedSecret(minLength: number) {
+  return z.preprocess((value) => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }, z.string().min(minLength).optional());
+}
+
+const PLAIN_MAILBOX = /^[^\s@<>"]+@[^\s@<>"]+$/;
+const NAMED_MAILBOX = /^[^\r\n<>"]{1,80}<[^\s@<>"]+@[^\s@<>"]+>$/;
+
+function requireTogether(
+  context: z.RefinementCtx,
+  values: Array<string | undefined>,
+  path: string,
+  message: string,
+): void {
+  const present = values.filter((item) => item !== undefined).length;
+  if (present !== 0 && present !== values.length) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [path],
+      message,
+    });
+  }
+}
+
+function isMailbox(value: string): boolean {
+  return PLAIN_MAILBOX.test(value);
+}
+
+function isSenderAddress(value: string): boolean {
+  return isMailbox(value) || NAMED_MAILBOX.test(value);
+}
 
 export type AppEnv = z.infer<typeof envSchema>;
 
