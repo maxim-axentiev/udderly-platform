@@ -64,6 +64,9 @@ export class NamingPublicController {
     if (result.outcome === "purchase_closed") {
       throw new ConflictException(PURCHASE_CLOSED_MESSAGE);
     }
+    if (result.outcome === "checkout_unavailable") {
+      throw new ConflictException("This object cannot be purchased right now.");
+    }
     return {
       reservationId: result.reservationId,
       holdExpiresAt: result.holdExpiresAt.toISOString(),

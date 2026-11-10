@@ -1,5 +1,11 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
+import {
+  defaultFareharborTierCheckouts,
+  fareharborCheckoutUrl,
+  fareharborTierCheckoutForPrice,
+  type FareharborTierCheckout,
+} from "@udderly/shared";
 import { Queue } from "bullmq";
 import { and, eq, isNull } from "drizzle-orm";
 import { DatabaseService } from "../database/database.service";
@@ -11,7 +17,7 @@ import { NAMING_HOLD_QUEUE } from "../queue/queue.constants";
 import { createCheckoutRef } from "./naming-checkout-ref";
 import { qualifiesForPurchaseDeadline } from "./naming-deadline";
 import {
-  fareharborGiftCardCheckoutUrl,
+  FAREHARBOR_TIER_CHECKOUTS,
   NAMING_CLOCK,
   NAMING_HOLD_MS,
 } from "./naming.constants";
@@ -34,7 +40,8 @@ export type NamingReserveResult =
   | { outcome: "not_found" }
   | { outcome: "unpublished" }
   | { outcome: "unavailable" }
-  | { outcome: "purchase_closed" };
+  | { outcome: "purchase_closed" }
+  | { outcome: "checkout_unavailable" };
 
 export type NamingReleaseResult = { outcome: "released" | "unchanged" };
 
@@ -46,12 +53,18 @@ export type NamingReleaseResult = { outcome: "released" | "unchanged" };
 @Injectable()
 export class NamingReservationService {
   private readonly logger = new Logger(NamingReservationService.name);
+  private readonly tiers: readonly FareharborTierCheckout[];
 
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @InjectQueue(NAMING_HOLD_QUEUE) private readonly queue: Queue,
     @Inject(NAMING_CLOCK) private readonly clock: () => Date,
-  ) {}
+    @Optional()
+    @Inject(FAREHARBOR_TIER_CHECKOUTS)
+    tiers?: readonly FareharborTierCheckout[],
+  ) {
+    this.tiers = tiers ?? defaultFareharborTierCheckouts();
+  }
 
   async reserve(objectId: string): Promise<NamingReserveResult> {
     for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -124,6 +137,14 @@ export class NamingReservationService {
         return { outcome: "unavailable" };
       }
 
+      const checkout = fareharborTierCheckoutForPrice(
+        this.tiers,
+        object.priceAmount,
+      );
+      if (!checkout) {
+        return { outcome: "checkout_unavailable" };
+      }
+
       const holdExpiresAt = new Date(now.getTime() + NAMING_HOLD_MS);
       const [reservation] = await tx
         .insert(namingReservations)
@@ -160,7 +181,7 @@ export class NamingReservationService {
         outcome: "reserved",
         reservationId: reservation.id,
         holdExpiresAt,
-        checkoutUrl: fareharborGiftCardCheckoutUrl(checkoutRef),
+        checkoutUrl: fareharborCheckoutUrl(checkout, checkoutRef),
       };
     });
   }

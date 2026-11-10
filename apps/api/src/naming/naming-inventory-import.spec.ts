@@ -317,9 +317,10 @@ test("campaign manifest imports through the isolated inventory API", {
   timeout: 180_000,
 }, async () => {
   assert.ok(databaseUrl);
+  await ensureImportDatabase();
   sqlClient = postgres(databaseUrl, { max: 4, onnotice: () => {} });
   await sqlClient.unsafe("select current_database()").then((rows) => {
-    assert.equal(rows[0]?.current_database, "naming");
+    assert.equal(rows[0]?.current_database, "naming_import");
   });
   await sqlClient.unsafe("drop table if exists naming_notice cascade");
   await sqlClient.unsafe("drop table if exists naming_name_revision cascade");
@@ -743,7 +744,26 @@ function localNamingDatabaseUrl(): string | undefined {
   if (parsed.pathname !== "/naming") {
     throw new Error("NAMING_TEST_DATABASE_URL must use the naming database");
   }
-  return url;
+  parsed.pathname = "/naming_import";
+  return parsed.toString();
+}
+
+async function ensureImportDatabase(): Promise<void> {
+  const adminUrl = process.env.NAMING_TEST_DATABASE_URL;
+  if (!adminUrl) {
+    return;
+  }
+  const admin = postgres(adminUrl, { max: 1, onnotice: () => {} });
+  try {
+    const existing = await admin<{ datname: string }[]>`
+      select datname from pg_database where datname = 'naming_import'
+    `;
+    if (existing.length === 0) {
+      await admin.unsafe("create database naming_import");
+    }
+  } finally {
+    await admin.end({ timeout: 5 });
+  }
 }
 
 function exists(path: string): boolean {

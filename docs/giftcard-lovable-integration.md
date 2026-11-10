@@ -70,9 +70,9 @@ Buy & Name runs only outside preview mode, and only for `available` objects.
 3. The response includes `reservationId`, `holdExpiresAt`, and `checkoutUrl`.
 4. The checkout URL is accepted only when it matches this exact pattern:
 
-   `https://fareharbor.com/embeds/book/udderlyridiculousfarmlife/items/308290/?full-items=yes&flow=573099&ref={ref}`
+   `https://fareharbor.com/embeds/book/udderlyridiculousfarmlife/items/{itemId}/?full-items=yes&flow={flowId}&ref={ref}`
 
-   `{ref}` is 1 to 128 characters from `A-Za-z0-9_-`. The API generates a 16-byte base64url reference. The browser does not create the reference.
+   `{ref}` is 1 to 128 characters from `A-Za-z0-9_-`. The API generates a 16-byte base64url reference. The browser does not create the reference. Until FareHarbor confirms separate items, `{itemId}` is `308290` and `{flowId}` is `573099` for every tier. A configured tier pair is accepted only as that exact item and flow together. Extra parameters, a different host, or a reordered query are rejected. An empty allow-list does not open checkout.
 5. A matching URL is saved in `sessionStorage` under `naming-checkout:{reservationId}` and the popup navigates there with `location.replace`. `popup.opener` is set to `null`. A non-matching URL closes the popup and is not stored.
 6. The current tab navigates to `/reservation/{reservationId}`.
 
@@ -190,9 +190,9 @@ The body is a strict object. Extra keys are rejected. `objectId` must be a UUID.
 
 The checkout URL is built on the server:
 
-`https://fareharbor.com/embeds/book/udderlyridiculousfarmlife/items/308290/?full-items=yes&flow=573099&ref={checkoutRef}`
+`https://fareharbor.com/embeds/book/udderlyridiculousfarmlife/items/{itemId}/?full-items=yes&flow={flowId}&ref={checkoutRef}`
 
-Item id `308290` and flow `573099` are fixed. The `ref` value is stored on the reservation and is how a later FareHarbor webhook is matched. The browser must open the returned URL unchanged.
+The item and flow come from the reservation's snapshotted price. `NAMING_FAREHARBOR_TIERS` maps `10000`, `25000`, `50000`, and `100000` cents to a FareHarbor item id and flow id. Leave it unset until those ids are confirmed. Unset uses item `308290` and flow `573099` for all four tiers. A published object whose price is not one of those tiers cannot be reserved. The `ref` value is stored on the reservation and is how a later FareHarbor webhook is matched. The browser must open the returned URL unchanged.
 
 | Status | Message | When |
 | --- | --- | --- |
@@ -200,6 +200,7 @@ Item id `308290` and flow `573099` are fixed. The `ref` value is stored on the r
 | 400 | Enter a valid object. | Body is not a strict `{ objectId: uuid }`. |
 | 404 | Not Found | Unknown id, unpublished object, or campaign disabled. |
 | 409 | This object is not available. | Not `available`, already held, or already claimed. |
+| 409 | This object cannot be purchased right now. | The snapshotted price has no configured FareHarbor item. No hold is created. |
 | 429 | Too many requests. Try again later. | Reserve rate limit. |
 
 Creating a reservation inserts a `held` reservation and sets the object to `held`. A delayed job releases that hold after 30 minutes if it is still the current hold. Release does not cancel an open FareHarbor checkout and does not claim the object. A late payment can still be matched without taking a newer hold.
@@ -284,7 +285,7 @@ Strict object. `name` is a string of at most 200 characters before normalization
 
 The browser never calls the FareHarbor webhook or the payment matcher. Those run inside the API after FareHarbor notifies Goat Barn. The redesigned site must not add its own payment confirmation.
 
-A payable webhook is matched on the checkout `ref`, the gift-card item, and the paid amount. An exact amount for the reservation price can claim the object and queue the naming email. A different amount, a duplicate booking, or a refund moves the reservation to review instead of granting a second claim or a second naming link. The customer sees that as `review`, `paid`, or `named` on the reservation URL. The naming page is a different URL and appears only after the email is sent.
+A payable webhook is matched on the checkout `ref` and the FareHarbor item configured for that reservation's snapshotted price. Another campaign item, including the confirmed item `308290` after a tier has moved to a different id, does not claim, underpay, refund, or email. A payment at least the snapshotted price can claim the object and queue the naming email. A smaller payment releases the hold and does not queue the naming email. A duplicate of the same booking does not create a second claim. A refund of the matched item still marks the payment reversed. The payment time still comes from `payment.created_at`. The customer sees that as `review`, `paid`, or `named` on the reservation URL. The naming page is a different URL and appears only after the email is sent.
 
 The email is plain text. The subject is `Naming rights for {objectName}`. The body contains the one private `/name/{token}` URL. FareHarbor sends the gift card itself in a separate message.
 

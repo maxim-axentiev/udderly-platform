@@ -1,3 +1,4 @@
+import { FareharborTierConfigError, parseFareharborTierCheckouts } from "@udderly/shared";
 import { z } from "zod";
 import { loadEnvFiles } from "./load-env";
 
@@ -56,6 +57,7 @@ const envSchema = z.object({
   NAMING_ADMIN_PASSWORD: optionalBoundedSecret(12),
   NAMING_ADMIN_SESSION_SECRET: optionalBoundedSecret(32),
   NAMING_PHOTO_DIR: optionalTrimmedSecret,
+  NAMING_FAREHARBOR_TIERS: optionalTrimmedSecret,
   NAMING_CAMPAIGN_ENABLED: z
     .preprocess((value) => {
       if (value === undefined || value === "") {
@@ -88,6 +90,18 @@ const envSchema = z.object({
       code: z.ZodIssueCode.custom,
       path: ["RESEND_FROM"],
       message: "RESEND_FROM must be an email address on the verified domain",
+    });
+  }
+  try {
+    parseFareharborTierCheckouts(value.NAMING_FAREHARBOR_TIERS);
+  } catch (error) {
+    context.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["NAMING_FAREHARBOR_TIERS"],
+      message:
+        error instanceof FareharborTierConfigError
+          ? error.message
+          : "NAMING_FAREHARBOR_TIERS is not a valid tier mapping",
     });
   }
   if (value.RESEND_REPLY_TO && !isMailbox(value.RESEND_REPLY_TO)) {

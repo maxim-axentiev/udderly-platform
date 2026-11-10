@@ -1,5 +1,10 @@
 import { Processor, WorkerHost } from "@nestjs/bullmq";
 import { Inject, Logger, Optional } from "@nestjs/common";
+import {
+  defaultFareharborTierCheckouts,
+  fareharborAcceptedItemIds,
+  type FareharborTierCheckout,
+} from "@udderly/shared";
 import { Job } from "bullmq";
 import { eq } from "drizzle-orm";
 import { DatabaseService } from "../database/database.service";
@@ -10,6 +15,7 @@ import { isFareharborGiftCardItem } from "./naming-gift-card";
 import { NamingGiftCardService } from "./naming-gift-card.service";
 import { NamingLinkDeliveryDispatchService } from "./naming-link-delivery.dispatch";
 import { NamingNoticeDispatchService } from "./naming-notice.dispatch";
+import { FAREHARBOR_TIER_CHECKOUTS } from "./naming.constants";
 
 type NamingGiftCardJobData = {
   eventId?: string;
@@ -18,6 +24,7 @@ type NamingGiftCardJobData = {
 @Processor(NAMING_GIFT_CARD_QUEUE)
 export class NamingGiftCardProcessor extends WorkerHost {
   private readonly logger = new Logger(NamingGiftCardProcessor.name);
+  private readonly tiers: readonly FareharborTierCheckout[];
 
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
@@ -29,8 +36,12 @@ export class NamingGiftCardProcessor extends WorkerHost {
     @Optional()
     @Inject(NamingNoticeDispatchService)
     private readonly notices?: NamingNoticeDispatchService,
+    @Optional()
+    @Inject(FAREHARBOR_TIER_CHECKOUTS)
+    tiers?: readonly FareharborTierCheckout[],
   ) {
     super();
+    this.tiers = tiers ?? defaultFareharborTierCheckouts();
   }
 
   async process(job: Job<NamingGiftCardJobData>): Promise<void> {
@@ -51,7 +62,12 @@ export class NamingGiftCardProcessor extends WorkerHost {
     if (!event || event.provider !== FAREHARBOR_PROVIDER || event.duplicateOf) {
       return;
     }
-    if (!isFareharborGiftCardItem(event.payload)) {
+    if (
+      !isFareharborGiftCardItem(
+        event.payload,
+        fareharborAcceptedItemIds(this.tiers),
+      )
+    ) {
       return;
     }
 

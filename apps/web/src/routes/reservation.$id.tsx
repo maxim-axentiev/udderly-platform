@@ -7,6 +7,7 @@ import {
   type ReservationView,
 } from "../naming/api";
 import { readCheckout, type StoredCheckout } from "../naming/checkout";
+import { loadFareharborCheckoutAllowList } from "../naming/fareharbor-checkout";
 import {
   CAMPAIGN_DEADLINE_NOTE,
   formatCatalogPrice,
@@ -19,6 +20,7 @@ import { Button } from "../naming/button";
 import { ObjectPhoto } from "../naming/object-photo";
 
 export const Route = createFileRoute("/reservation/$id")({
+  loader: () => loadFareharborCheckoutAllowList(),
   head: () => ({
     meta: [{ title: "Reservation · Udderly Ridiculous" }],
   }),
@@ -27,14 +29,15 @@ export const Route = createFileRoute("/reservation/$id")({
 
 function ReservationPage() {
   const { id } = Route.useParams();
+  const checkoutAllowList = Route.useLoaderData();
   const [reservation, setReservation] = useState<ReservationView | null>(null);
   const [checkout, setCheckout] = useState<StoredCheckout | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    setCheckout(readCheckout(id));
-  }, [id]);
+    setCheckout(readCheckout(id, checkoutAllowList));
+  }, [id, checkoutAllowList]);
 
   useEffect(() => {
     const controller = new AbortController();

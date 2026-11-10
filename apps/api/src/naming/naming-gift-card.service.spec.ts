@@ -21,6 +21,7 @@ test("reads a sanitized CA$20 gift-card payment", () => {
     kind: "payable",
     checkoutRef: "ref-a",
     bookingUuid: BOOKING_UUID,
+    itemId: "308290",
     paidAmount: 2000,
     paidAt: new Date("2026-11-03T06:14:28.000Z"),
   });

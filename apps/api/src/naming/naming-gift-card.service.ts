@@ -1,4 +1,10 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import {
+  defaultFareharborTierCheckouts,
+  expectedFareharborItemId,
+  fareharborAcceptedItemIds,
+  type FareharborTierCheckout,
+} from "@udderly/shared";
 import { and, eq, isNull, or } from "drizzle-orm";
 import { DatabaseService } from "../database/database.service";
 import {
@@ -8,7 +14,7 @@ import {
 } from "../database/schema/naming";
 import { qualifiesForPurchaseDeadline } from "./naming-deadline";
 import { readFareharborGiftCard } from "./naming-gift-card";
-import { NAMING_CLOCK } from "./naming.constants";
+import { FAREHARBOR_TIER_CHECKOUTS, NAMING_CLOCK } from "./naming.constants";
 
 type NamingObjectRow = typeof namingObjects.$inferSelect;
 type NamingReservationRow = typeof namingReservations.$inferSelect;
@@ -48,14 +54,23 @@ export type NamingGiftCardMatchResult =
 @Injectable()
 export class NamingGiftCardService {
   private readonly logger = new Logger(NamingGiftCardService.name);
+  private readonly tiers: readonly FareharborTierCheckout[];
 
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(NAMING_CLOCK) private readonly clock: () => Date,
-  ) {}
+    @Optional()
+    @Inject(FAREHARBOR_TIER_CHECKOUTS)
+    tiers?: readonly FareharborTierCheckout[],
+  ) {
+    this.tiers = tiers ?? defaultFareharborTierCheckouts();
+  }
 
   async match(payload: unknown): Promise<NamingGiftCardMatchResult> {
-    const reading = readFareharborGiftCard(payload);
+    const reading = readFareharborGiftCard(
+      payload,
+      fareharborAcceptedItemIds(this.tiers),
+    );
     if (reading.kind === "malformed" || reading.kind === "no_reference") {
       this.logger.warn(`naming_gift_card_${reading.kind}`);
       return { outcome: "ignored", reason: reading.kind };
@@ -100,6 +115,15 @@ export class NamingGiftCardService {
       const reservation = await lockReservation(tx, found.id);
       if (!object || !reservation) {
         return { outcome: "ignored", reason: "unmatched_reference" };
+      }
+
+      const expectedItemId = expectedFareharborItemId(
+        this.tiers,
+        reservation.priceAmount,
+      );
+      if (!expectedItemId || reading.itemId !== expectedItemId) {
+        this.logger.warn("naming_gift_card_wrong_item");
+        return { outcome: "ignored", reason: "wrong_item" };
       }
 
       if (reading.kind === "refunded") {

@@ -1,4 +1,9 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import {
+  defaultFareharborTierCheckouts,
+  expectedFareharborItemId,
+  type FareharborTierCheckout,
+} from "@udderly/shared";
 import { and, eq, lt, or } from "drizzle-orm";
 import { EnvService } from "../config/env.service";
 import { DatabaseService } from "../database/database.service";
@@ -11,7 +16,11 @@ import {
 import { readVerifiedPurchaserAddress } from "./naming-link-delivery.service";
 import { NamingMailer } from "./naming-mailer";
 import { namingNoticeMessage } from "./naming-notice";
-import { NAMING_CLOCK, NAMING_LINK_DELIVERY_STALE_MS } from "./naming.constants";
+import {
+  FAREHARBOR_TIER_CHECKOUTS,
+  NAMING_CLOCK,
+  NAMING_LINK_DELIVERY_STALE_MS,
+} from "./naming.constants";
 
 type NamingTx = Parameters<DatabaseService["db"]["transaction"]>[0] extends (
   tx: infer Tx,
@@ -40,13 +49,19 @@ type PreparedNotice =
 @Injectable()
 export class NamingNoticeService {
   private readonly logger = new Logger(NamingNoticeService.name);
+  private readonly tiers: readonly FareharborTierCheckout[];
 
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(NamingMailer) private readonly mail: NamingMailer,
     @Inject(EnvService) private readonly env: EnvService,
     @Inject(NAMING_CLOCK) private readonly clock: () => Date,
-  ) {}
+    @Optional()
+    @Inject(FAREHARBOR_TIER_CHECKOUTS)
+    tiers?: readonly FareharborTierCheckout[],
+  ) {
+    this.tiers = tiers ?? defaultFareharborTierCheckouts();
+  }
 
   async deliver(
     reservationId: string,
@@ -112,10 +127,15 @@ export class NamingNoticeService {
       ) {
         return { outcome: "not_eligible" };
       }
+      const expectedItemId = expectedFareharborItemId(
+        this.tiers,
+        reservation.priceAmount,
+      );
       const address = await readVerifiedPurchaserAddress(
         tx,
         reservation.fareharborBookingUuid,
         reservation.paidAmount,
+        expectedItemId ? new Set([expectedItemId]) : new Set(),
       );
       if (!address) {
         return { outcome: "not_eligible" };

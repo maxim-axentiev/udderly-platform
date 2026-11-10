@@ -1,4 +1,9 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import {
+  defaultFareharborTierCheckouts,
+  expectedFareharborItemId,
+  type FareharborTierCheckout,
+} from "@udderly/shared";
 import { and, asc, eq, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { EnvService } from "../config/env.service";
 import { DatabaseService } from "../database/database.service";
@@ -13,7 +18,11 @@ import {
   readNamingPurchaserAddress,
 } from "./naming-link-delivery";
 import { NamingMailer } from "./naming-mailer";
-import { NAMING_CLOCK, NAMING_LINK_DELIVERY_STALE_MS } from "./naming.constants";
+import {
+  FAREHARBOR_TIER_CHECKOUTS,
+  NAMING_CLOCK,
+  NAMING_LINK_DELIVERY_STALE_MS,
+} from "./naming.constants";
 
 type NamingTx = Parameters<DatabaseService["db"]["transaction"]>[0] extends (
   tx: infer Tx,
@@ -71,13 +80,19 @@ type PreparedResend =
 @Injectable()
 export class NamingLinkDeliveryService {
   private readonly logger = new Logger(NamingLinkDeliveryService.name);
+  private readonly tiers: readonly FareharborTierCheckout[];
 
   constructor(
     @Inject(DatabaseService) private readonly database: DatabaseService,
     @Inject(NamingMailer) private readonly mail: NamingMailer,
     @Inject(EnvService) private readonly env: EnvService,
     @Inject(NAMING_CLOCK) private readonly clock: () => Date,
-  ) {}
+    @Optional()
+    @Inject(FAREHARBOR_TIER_CHECKOUTS)
+    tiers?: readonly FareharborTierCheckout[],
+  ) {
+    this.tiers = tiers ?? defaultFareharborTierCheckouts();
+  }
 
   async deliver(
     reservationId: string,
@@ -237,6 +252,7 @@ export class NamingLinkDeliveryService {
         tx,
         reservation.fareharborBookingUuid,
         reservation.paidAmount,
+        itemIdsForPrice(this.tiers, reservation.priceAmount),
       );
       if (!address) {
         return { outcome: "not_eligible" };
@@ -370,6 +386,7 @@ export class NamingLinkDeliveryService {
         tx,
         reservation.fareharborBookingUuid,
         reservation.paidAmount,
+        itemIdsForPrice(this.tiers, reservation.priceAmount),
       );
       if (!address) {
         return { outcome: "not_eligible" };
@@ -464,10 +481,19 @@ export class NamingLinkDeliveryService {
   }
 }
 
+function itemIdsForPrice(
+  tiers: readonly FareharborTierCheckout[],
+  priceCents: number,
+): ReadonlySet<string> {
+  const itemId = expectedFareharborItemId(tiers, priceCents);
+  return itemId ? new Set([itemId]) : new Set();
+}
+
 export async function readVerifiedPurchaserAddress(
   tx: NamingTx,
   bookingUuid: string,
   paidAmount: number,
+  allowedItemIds?: ReadonlySet<string>,
 ): Promise<string | undefined> {
   const rows = await tx
     .select({ payload: integrationEvents.payload })
@@ -483,7 +509,7 @@ export async function readVerifiedPurchaserAddress(
 
   let address: string | undefined;
   for (const row of rows) {
-    const reading = readFareharborGiftCard(row.payload);
+    const reading = readFareharborGiftCard(row.payload, allowedItemIds);
     if (reading.kind !== "payable" && reading.kind !== "refunded") {
       continue;
     }

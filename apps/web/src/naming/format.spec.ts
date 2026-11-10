@@ -97,6 +97,38 @@ test("checkout links must be the gift-card item with a reference", () => {
     ),
     null,
   );
+  assert.equal(
+    isFareharborCheckoutUrl(
+      checkoutUrl.replace("full-items=yes&flow=573099", "flow=573099&full-items=yes"),
+    ),
+    false,
+  );
+  assert.equal(isFareharborCheckoutUrl(checkoutUrl, []), false);
+  const tierUrl =
+    "https://fareharbor.com/embeds/book/udderlyridiculousfarmlife/items/900250/?full-items=yes&flow=800250&ref=tier_ref-250";
+  const allowList = [
+    { itemId: "900100", flowId: "800100" },
+    { itemId: "900250", flowId: "800250" },
+  ];
+  assert.equal(isFareharborCheckoutUrl(tierUrl), false);
+  assert.equal(isFareharborCheckoutUrl(tierUrl, allowList), true);
+  assert.equal(
+    isFareharborCheckoutUrl(
+      tierUrl.replace("flow=800250", "flow=800100"),
+      allowList,
+    ),
+    false,
+  );
+  assert.equal(
+    parseStoredCheckout(
+      JSON.stringify({
+        checkoutUrl: tierUrl,
+        holdExpiresAt: "2026-11-03T15:30:00.000Z",
+      }),
+      allowList,
+    )?.checkoutUrl,
+    tierUrl,
+  );
 });
 
 test("reservation copy does not treat checkout return as payment", () => {

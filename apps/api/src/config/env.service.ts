@@ -1,4 +1,5 @@
 import { Injectable } from "@nestjs/common";
+import { parseFareharborTierCheckouts } from "@udderly/shared";
 import { META_ADS_CANONICAL_ACCOUNT_ID } from "../integrations/meta-ads/meta-ads.constants";
 import { AppEnv, validateEnv } from "./env";
 
@@ -160,6 +161,10 @@ export class EnvService {
 
   get namingCampaignEnabled(): boolean {
     return this.env.NAMING_CAMPAIGN_ENABLED;
+  }
+
+  get fareharborTierCheckouts() {
+    return parseFareharborTierCheckouts(this.env.NAMING_FAREHARBOR_TIERS);
   }
 
   get namingAdmin():

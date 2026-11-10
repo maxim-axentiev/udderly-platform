@@ -83,7 +83,7 @@ test("reserves a published object once", {
   now = new Date("2026-11-03T00:00:00.000Z");
   const objectId = await insertObject({
     name: "North gate",
-    priceAmount: 2000,
+    priceAmount: 10000,
     publishedAt: now,
   });
 
@@ -104,7 +104,7 @@ test("reserves a published object once", {
     .select()
     .from(namingObjects)
     .where(eq(namingObjects.id, objectId));
-  assert.equal(reservation.priceAmount, 2000);
+  assert.equal(reservation.priceAmount, 10000);
   assert.equal(reservation.currency, "CAD");
   assert.equal(reservation.status, "held");
   assert.equal(reservation.adminResolutionRequired, false);
@@ -130,7 +130,7 @@ test("reserves a published object once", {
     .select()
     .from(namingReservations)
     .where(eq(namingReservations.id, reservation.id));
-  assert.equal(afterPriceChange.priceAmount, 2000);
+  assert.equal(afterPriceChange.priceAmount, 10000);
 
   const again = await service.reserve(objectId);
   assert.equal(again.outcome, "unavailable");
@@ -156,7 +156,7 @@ test("only one of two simultaneous reservations succeeds", {
   now = new Date("2026-11-03T02:00:00.000Z");
   const objectId = await insertObject({
     name: "Shared gate",
-    priceAmount: 4500,
+    priceAmount: 25000,
     publishedAt: now,
   });
   const [first, second] = await Promise.all([
@@ -167,7 +167,7 @@ test("only one of two simultaneous reservations succeeds", {
   assert.deepEqual(outcomes, ["reserved", "unavailable"]);
   const reservations = await database.select().from(namingReservations);
   assert.equal(reservations.length, 1);
-  assert.equal(reservations[0].priceAmount, 4500);
+  assert.equal(reservations[0].priceAmount, 25000);
   const [object] = await database
     .select()
     .from(namingObjects)
@@ -183,12 +183,12 @@ test("two objects receive different checkout refs", {
   now = new Date("2026-11-03T03:00:00.000Z");
   const firstId = await insertObject({
     name: "East fence",
-    priceAmount: 1500,
+    priceAmount: 10000,
     publishedAt: now,
   });
   const secondId = await insertObject({
     name: "West fence",
-    priceAmount: 1600,
+    priceAmount: 25000,
     publishedAt: now,
   });
   const first = await service.reserve(firstId);
@@ -212,7 +212,7 @@ test("a later reservation releases an expired hold", {
   now = new Date("2026-11-03T04:00:00.000Z");
   const objectId = await insertObject({
     name: "Timed post",
-    priceAmount: 2200,
+    priceAmount: 10000,
     publishedAt: now,
   });
   const first = await service.reserve(objectId);
@@ -248,7 +248,7 @@ test("release job is idempotent and ignores an older hold", {
   now = new Date("2026-11-03T05:00:00.000Z");
   const objectId = await insertObject({
     name: "Job post",
-    priceAmount: 1800,
+    priceAmount: 10000,
     publishedAt: now,
   });
   const first = await service.reserve(objectId);

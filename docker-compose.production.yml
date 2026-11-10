@@ -106,6 +106,7 @@ services:
       META_ADS_ACCESS_TOKEN: ${META_ADS_ACCESS_TOKEN:-}
       MAILCHIMP_API_KEY: ${MAILCHIMP_API_KEY:-}
       NAMING_CAMPAIGN_ENABLED: ${NAMING_CAMPAIGN_ENABLED:-false}
+      NAMING_FAREHARBOR_TIERS: ${NAMING_FAREHARBOR_TIERS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM: ${RESEND_FROM:-}
       RESEND_REPLY_TO: ${RESEND_REPLY_TO:-}
@@ -182,6 +183,7 @@ services:
       PORT: "3000"
       # Temporary private preview. Does not enable purchases or the naming API.
       NAMING_PREVIEW_MODE: ${NAMING_PREVIEW_MODE:-true}
+      NAMING_FAREHARBOR_TIERS: ${NAMING_FAREHARBOR_TIERS:-}
     networks:
       - web
     healthcheck:

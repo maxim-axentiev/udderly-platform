@@ -1,5 +1,6 @@
 import { BullModule } from "@nestjs/bullmq";
 import { Module, type MiddlewareConsumer, type NestModule } from "@nestjs/common";
+import { EnvService } from "../config/env.service";
 import { DatabaseModule } from "../database/database.module";
 import {
   NAMING_GIFT_CARD_QUEUE,
@@ -29,7 +30,7 @@ import { NamingPublicController } from "./naming-public.controller";
 import { NamingPublicService } from "./naming-public.service";
 import { NamingRateLimiter } from "./naming-rate-limit";
 import { NamingReservationService } from "./naming-reservation.service";
-import { NAMING_CLOCK } from "./naming.constants";
+import { FAREHARBOR_TIER_CHECKOUTS, NAMING_CLOCK } from "./naming.constants";
 
 @Module({
   imports: [
@@ -69,6 +70,11 @@ import { NAMING_CLOCK } from "./naming.constants";
     {
       provide: NAMING_CLOCK,
       useValue: () => new Date(),
+    },
+    {
+      provide: FAREHARBOR_TIER_CHECKOUTS,
+      useFactory: (env: EnvService) => env.fareharborTierCheckouts,
+      inject: [EnvService],
     },
   ],
   exports: [NamingGiftCardDispatchService],

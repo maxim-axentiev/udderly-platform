@@ -9,13 +9,20 @@ import {
 } from "../naming/api";
 import { CampaignFrame } from "../naming/campaign-chrome";
 import { rememberCheckout } from "../naming/checkout";
+import { loadFareharborCheckoutAllowList } from "../naming/fareharbor-checkout";
 import { isFareharborCheckoutUrl } from "../naming/format";
 import { CampaignHome } from "../naming/home-sections";
 import { ObjectCatalog } from "../naming/object-catalog";
 import { loadCampaignPreview } from "../naming/preview";
 
 export const Route = createFileRoute("/")({
-  loader: () => loadCampaignPreview(),
+  loader: async () => {
+    const [preview, checkoutAllowList] = await Promise.all([
+      loadCampaignPreview(),
+      loadFareharborCheckoutAllowList(),
+    ]);
+    return { preview, checkoutAllowList };
+  },
   head: () => ({
     meta: [{ title: "Name That Thing! · Udderly Ridiculous" }],
   }),
@@ -23,7 +30,7 @@ export const Route = createFileRoute("/")({
 });
 
 function HomePage() {
-  const preview = Route.useLoaderData();
+  const { preview, checkoutAllowList } = Route.useLoaderData();
   const navigate = useNavigate();
   const [objects, setObjects] = useState<NamingObject[] | null>(
     preview.enabled ? preview.objects : null,
@@ -62,11 +69,15 @@ function HomePage() {
     setError("");
     try {
       const created = await createReservation(objectId);
-      if (isFareharborCheckoutUrl(created.checkoutUrl)) {
-        rememberCheckout(created.reservationId, {
-          checkoutUrl: created.checkoutUrl,
-          holdExpiresAt: created.holdExpiresAt,
-        });
+      if (isFareharborCheckoutUrl(created.checkoutUrl, checkoutAllowList)) {
+        rememberCheckout(
+          created.reservationId,
+          {
+            checkoutUrl: created.checkoutUrl,
+            holdExpiresAt: created.holdExpiresAt,
+          },
+          checkoutAllowList,
+        );
         if (popup) {
           try {
             popup.opener = null;

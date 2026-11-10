@@ -1,5 +1,8 @@
 import { createHash, randomBytes } from "node:crypto";
-import { FAREHARBOR_GIFT_CARD_ITEM_ID } from "./naming.constants";
+import {
+  defaultFareharborTierCheckouts,
+  fareharborAcceptedItemIds,
+} from "@udderly/shared";
 
 export type NamingGiftCardReading =
   | { kind: "malformed" }
@@ -12,12 +15,14 @@ export type NamingGiftCardReading =
       kind: "refunded";
       checkoutRef: string;
       bookingUuid: string;
+      itemId: string;
       paidAmount: number | null;
     }
   | {
       kind: "payable";
       checkoutRef: string;
       bookingUuid: string;
+      itemId: string;
       paidAmount: number;
       paidAt: Date | null;
     };
@@ -26,7 +31,12 @@ export type NamingGiftCardReading =
  * Reads the gift-card fields confirmed on FareHarbor item 308290.
  * Contact, card, and display-only fields are ignored.
  */
-export function readFareharborGiftCard(payload: unknown): NamingGiftCardReading {
+export function readFareharborGiftCard(
+  payload: unknown,
+  allowedItemIds: ReadonlySet<string> = fareharborAcceptedItemIds(
+    defaultFareharborTierCheckouts(),
+  ),
+): NamingGiftCardReading {
   if (!isPlainObject(payload) || !isPlainObject(payload.booking)) {
     return { kind: "malformed" };
   }
@@ -44,7 +54,7 @@ export function readFareharborGiftCard(payload: unknown): NamingGiftCardReading 
   if (itemPk === undefined) {
     return { kind: "ignored", reason: "invalid_payment" };
   }
-  if (itemPk !== FAREHARBOR_GIFT_CARD_ITEM_ID) {
+  if (!allowedItemIds.has(itemPk)) {
     return { kind: "ignored", reason: "wrong_item" };
   }
 
@@ -67,6 +77,7 @@ export function readFareharborGiftCard(payload: unknown): NamingGiftCardReading 
       kind: "refunded",
       checkoutRef: reference,
       bookingUuid,
+      itemId: itemPk,
       paidAmount,
     };
   }
@@ -91,16 +102,23 @@ export function readFareharborGiftCard(payload: unknown): NamingGiftCardReading 
     kind: "payable",
     checkoutRef: reference,
     bookingUuid,
+    itemId: itemPk,
     paidAmount,
     paidAt: readPaymentCompletedAt(payment.created_at),
   };
 }
 
-export function isFareharborGiftCardItem(payload: unknown): boolean {
+export function isFareharborGiftCardItem(
+  payload: unknown,
+  allowedItemIds: ReadonlySet<string> = fareharborAcceptedItemIds(
+    defaultFareharborTierCheckouts(),
+  ),
+): boolean {
   if (!isPlainObject(payload) || !isPlainObject(payload.booking)) {
     return false;
   }
-  return readItemPk(payload.booking.availability) === FAREHARBOR_GIFT_CARD_ITEM_ID;
+  const itemPk = readItemPk(payload.booking.availability);
+  return itemPk !== undefined && allowedItemIds.has(itemPk);
 }
 
 export function createNamingToken(): { token: string; hash: string } {

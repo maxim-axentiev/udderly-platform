@@ -8,6 +8,11 @@ import {
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { InjectQueue } from "@nestjs/bullmq";
+import {
+  defaultFareharborTierCheckouts,
+  fareharborAcceptedItemIds,
+  type FareharborTierCheckout,
+} from "@udderly/shared";
 import { Queue } from "bullmq";
 import { and, count, desc, eq, inArray, isNull } from "drizzle-orm";
 import { EnvService } from "../../config/env.service";
@@ -43,6 +48,15 @@ export class FareharborWebhookService {
 
   get configured(): boolean {
     return this.env.isFareharborWebhookConfigured;
+  }
+
+  private giftCardItemIds(): ReadonlySet<string> {
+    const configured = (
+      this.env as { fareharborTierCheckouts?: readonly FareharborTierCheckout[] }
+    ).fareharborTierCheckouts;
+    return fareharborAcceptedItemIds(
+      configured ?? defaultFareharborTierCheckouts(),
+    );
   }
 
   assertValidSecret(provided: string): void {
@@ -93,7 +107,7 @@ export class FareharborWebhookService {
       }
     }
 
-    if (isFareharborGiftCardItem(body)) {
+    if (isFareharborGiftCardItem(body, this.giftCardItemIds())) {
       try {
         const queued = await this.namingGifts?.enqueueEvent(persisted.eventId);
         if (!this.namingGifts || queued === "failed") {

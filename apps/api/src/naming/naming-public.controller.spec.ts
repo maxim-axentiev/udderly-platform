@@ -521,7 +521,7 @@ async function insertObject(input: {
       name: input.name,
       description: input.description ?? "",
       photoUrl: input.photoUrl ?? null,
-      priceAmount: input.priceAmount ?? 2000,
+      priceAmount: input.priceAmount ?? 10000,
       currency: "CAD",
       publishedAt: input.published ? now : null,
       status: "available",
@@ -531,12 +531,12 @@ async function insertObject(input: {
     await database.insert(namingReservations).values({
       objectId: object.id,
       checkoutRef: input.checkoutRef,
-      priceAmount: input.priceAmount ?? 2000,
+      priceAmount: input.priceAmount ?? 10000,
       currency: "CAD",
       status: "claimed",
       claimedAt: now,
       fareharborBookingUuid: input.bookingUuid,
-      paidAmount: input.priceAmount ?? 2000,
+      paidAmount: input.priceAmount ?? 10000,
       namingTokenHash: input.tokenHash,
       adminResolutionRequired: false,
     });
@@ -547,7 +547,7 @@ async function insertObject(input: {
       .values({
         objectId: object.id,
         checkoutRef: `held-${object.id}`,
-        priceAmount: input.priceAmount ?? 2000,
+        priceAmount: input.priceAmount ?? 10000,
         currency: "CAD",
         status: "held",
         holdExpiresAt: new Date(now.getTime() + 30 * 60 * 1000),

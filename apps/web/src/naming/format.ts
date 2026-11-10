@@ -1,3 +1,5 @@
+import { isFareharborCheckoutUrl as sharedIsFareharborCheckoutUrl } from "@udderly/shared";
+
 export type NamingAvailability = "available" | "held" | "claimed";
 
 export type ReservationStatus =
@@ -11,9 +13,6 @@ export type ReservationStatus =
 
 export const CAMPAIGN_DEADLINE_NOTE =
   "Naming purchases end December 31, 2026 at 11:59 p.m. Eastern Time. Names can be submitted until January 14, 2027 at 11:59 p.m. Eastern Time. A name is recognized at the farm from February 1, 2027 through January 31, 2028.";
-
-const FAREHARBOR_CHECKOUT =
-  /^https:\/\/fareharbor\.com\/embeds\/book\/udderlyridiculousfarmlife\/items\/308290\/\?full-items=yes&flow=573099&ref=[A-Za-z0-9_-]{1,128}$/;
 
 export function formatPrice(cents: number, currency = "CAD"): string {
   return new Intl.NumberFormat("en-CA", {
@@ -89,8 +88,11 @@ export function safePhotoUrl(value: string | null): string | null {
   return null;
 }
 
-export function isFareharborCheckoutUrl(value: string): boolean {
-  return FAREHARBOR_CHECKOUT.test(value);
+export function isFareharborCheckoutUrl(
+  value: string,
+  allowList?: ReadonlyArray<{ itemId: string; flowId: string }>,
+): boolean {
+  return sharedIsFareharborCheckoutUrl(value, allowList);
 }
 
 export function holdRemainingLabel(iso: string, now = Date.now()): string {
