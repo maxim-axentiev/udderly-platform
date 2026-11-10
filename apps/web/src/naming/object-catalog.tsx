@@ -38,7 +38,7 @@ export function ObjectCatalog({
       <div
         role="group"
         aria-label="Filter objects by gift card tier"
-        className="flex max-w-full gap-2 overflow-x-auto pb-2 md:flex-wrap md:justify-center"
+        className="grid grid-cols-2 gap-2 md:flex md:flex-wrap md:justify-center"
       >
         {options.map((option) => (
           <button
@@ -46,7 +46,8 @@ export function ObjectCatalog({
             type="button"
             aria-pressed={tier === option.value}
             className={cn(
-              "min-h-12 shrink-0 rounded-full border-2 border-headline px-5 font-display text-lg font-extrabold uppercase transition",
+              "min-h-12 w-full rounded-full border-2 border-headline px-3 font-display text-lg font-extrabold uppercase transition md:w-auto md:px-5",
+              option.value === "all" && "col-span-2",
               tier === option.value
                 ? "bg-headline text-background"
                 : "bg-background text-headline hover:bg-secondary-accent",

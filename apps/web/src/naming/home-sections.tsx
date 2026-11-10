@@ -528,7 +528,7 @@ function BeforeYouBuy() {
           <p className="mt-6 text-center">
             <a
               href="#faq"
-              className="font-display text-lg font-extrabold uppercase text-headline underline decoration-primary-accent decoration-2 underline-offset-4"
+              className="inline-flex min-h-11 items-center justify-center px-3 font-display text-lg font-extrabold uppercase text-headline underline decoration-primary-accent decoration-2 underline-offset-4"
             >
               Read the full FAQs & campaign terms
             </a>
