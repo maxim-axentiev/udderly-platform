@@ -218,5 +218,7 @@ volumes:
     name: udderly-platform-production-postgres-data
   redis_data:
     name: udderly-platform-production-redis-data
+  # Existing production volume. External so Compose never creates, renames, or deletes it.
   naming_photos:
     name: udderly-platform-production-naming-photos
+    external: true
