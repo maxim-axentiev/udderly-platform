@@ -1,17 +1,9 @@
 /**
  * Customer catalogues and launch publication use real objects only.
- * Test checkout is not enabled: a test object cannot be reserved or published
- * through the customer and staff paths below. An explicit later authorization
- * has to opt in before a test object can be checked out.
+ * Test checkout is a separate staff route and does not publish these objects.
  */
-export const TEST_CHECKOUT_ENABLED = false;
-
 export function isCustomerNamingObject(object: { isTest: boolean }): boolean {
   return !object.isTest;
-}
-
-export function testObjectCheckoutAllowed(object: { isTest: boolean }): boolean {
-  return object.isTest && TEST_CHECKOUT_ENABLED;
 }
 
 export function isPreviewCustomerObject(object: {

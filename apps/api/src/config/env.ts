@@ -66,6 +66,17 @@ const envSchema = z.object({
       return value;
     }, z.enum(["true", "false"]))
     .transform((value) => value === "true"),
+  NAMING_TEST_CHECKOUT_OBJECT_ID: z.preprocess((value) => {
+    if (typeof value !== "string") {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(
+      trimmed,
+    )
+      ? trimmed
+      : undefined;
+  }, z.string().optional()),
   NAMING_PREVIEW_MODE: z
     .preprocess((value) => {
       if (value === undefined || value === "") {

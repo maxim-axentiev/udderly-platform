@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { parseFareharborTierCheckouts } from "@udderly/shared";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
@@ -147,6 +148,77 @@ test("rejects an unpublished object", { skip: !databaseUrl }, async () => {
   assert.equal((await service.reserve(objectId)).outcome, "unpublished");
   const reservations = await database.select().from(namingReservations);
   assert.equal(reservations.length, 0);
+});
+
+test("staff test checkout holds the configured unpublished test object once", {
+  skip: !databaseUrl,
+}, async () => {
+  await clearNamingTables();
+  queued.length = 0;
+  now = new Date("2026-11-11T15:00:00.000Z");
+  const realId = await insertObject({
+    name: "Real pail",
+    priceAmount: 10000,
+    publishedAt: null,
+  });
+  const testId = await insertObject({
+    name: "Campaign Test Object $100",
+    priceAmount: 10000,
+    publishedAt: null,
+  });
+  await database
+    .update(namingObjects)
+    .set({ isTest: true, publishedAt: now })
+    .where(eq(namingObjects.id, testId));
+  const staff = new NamingReservationService(
+    { db: database } as never,
+    {
+      async add(
+        _name: string,
+        data: { reservationId: string },
+        options: { delay: number; jobId: string },
+      ) {
+        queued.push({
+          delay: options.delay,
+          jobId: options.jobId,
+          reservationId: data.reservationId,
+        });
+      },
+    } as never,
+    () => now,
+    parseFareharborTierCheckouts(
+      "10000:772245:573099,25000:772248:573099,50000:772249:573099,100000:772250:573099",
+    ),
+  );
+  assert.equal((await staff.reserve(testId)).outcome, "unpublished");
+  assert.equal((await staff.reserveTestObject(realId, testId)).outcome, "unpublished");
+  assert.equal((await staff.reserveTestObject(testId, realId)).outcome, "unpublished");
+  assert.equal((await staff.reserveTestObject(testId, testId)).outcome, "unpublished");
+  await database
+    .update(namingObjects)
+    .set({ publishedAt: null })
+    .where(eq(namingObjects.id, testId));
+  const reserved = await staff.reserveTestObject(testId, testId);
+  assert.equal(reserved.outcome, "reserved");
+  if (reserved.outcome !== "reserved") {
+    return;
+  }
+  assert.equal(
+    reserved.holdExpiresAt.toISOString(),
+    new Date(now.getTime() + NAMING_HOLD_MS).toISOString(),
+  );
+  assert.match(reserved.checkoutUrl, /items\/772245\//);
+  assert.match(reserved.checkoutUrl, /[?&]flow=573099(?:&|$)/);
+  assert.match(reserved.checkoutUrl, /[?&]full-items=yes(?:&|$)/);
+  const again = await staff.reserveTestObject(testId, testId);
+  assert.equal(again.outcome, "unavailable");
+  const reservations = await database.select().from(namingReservations);
+  assert.equal(reservations.length, 1);
+  assert.equal(reservations[0]?.status, "held");
+  assert.equal(reservations[0]?.priceAmount, 10000);
+  assert.equal(reservations[0]?.objectId, testId);
+  assert.equal(queued.length, 1);
+  assert.equal(queued[0]?.delay, NAMING_HOLD_MS);
 });
 
 test("only one of two simultaneous reservations succeeds", {

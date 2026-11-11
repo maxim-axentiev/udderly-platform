@@ -168,6 +168,10 @@ export class NamingPublicService {
     return { ...body, status: "review" };
   }
 
+  identifyLink(token: string) {
+    return this.links.identify(token);
+  }
+
   resolveLink(token: string) {
     return this.links.resolve(token);
   }

@@ -9,6 +9,7 @@ import test, { after, before, describe } from "node:test";
 import { Module, type MiddlewareConsumer, type NestModule } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import type { NestExpressApplication } from "@nestjs/platform-express";
+import { fareharborCheckoutUrl } from "@udderly/shared";
 import { validateEnv } from "../config/env";
 import { EnvService } from "../config/env.service";
 import { DatabaseService } from "../database/database.service";
@@ -28,6 +29,7 @@ import { NamingObjectService } from "./naming-object.service";
 import { NamingPublicController } from "./naming-public.controller";
 import { NamingPublicService } from "./naming-public.service";
 import { NamingRateLimiter } from "./naming-rate-limit";
+import { NamingReservationService } from "./naming-reservation.service";
 import { NamingStaffService } from "./naming-staff.service";
 
 const PASSWORD = "staff-password";
@@ -97,7 +99,12 @@ type StoredObject = {
 const rows: StoredObject[] = [];
 let failUpdates = 0;
 const photoDir = mkdtempSync(join(tmpdir(), "naming-photos-"));
-const publicCalls = { list: 0 };
+const publicCalls = { list: 0, reserve: 0, identify: 0 };
+const testCheckoutCalls: string[] = [];
+let testCheckoutObjectId: string | undefined;
+let linkIdentity: { objectId: string; isTest: boolean } | undefined;
+const TEST_OBJECT_ID = "b7269f72-00f6-450e-95e4-95c76d708497";
+const NAMING_TOKEN = "a".repeat(43);
 let app: NestExpressApplication | undefined;
 let baseUrl = "";
 
@@ -257,6 +264,173 @@ describe("inventory routes", { concurrency: false }, () => {
     assert.equal(published.status, 409);
     assert.equal(rows[0]?.publishedAt, null);
     assert.equal(rows[0]?.isTest, true);
+  });
+
+  test("staff test checkout stays closed until the configured test object is authorized", async () => {
+    reset();
+    const session = await login("203.0.113.22");
+    const anonymous = await fetch(
+      `${baseUrl}/inventory/objects/${TEST_OBJECT_ID}/test-checkout`,
+      { method: "POST" },
+    );
+    assert.equal(anonymous.status, 401);
+    const missingCsrf = await fetch(
+      `${baseUrl}/inventory/objects/${TEST_OBJECT_ID}/test-checkout`,
+      { method: "POST", headers: { cookie: session.cookie } },
+    );
+    assert.equal(missingCsrf.status, 403);
+    const unset = await mutate(
+      session,
+      "POST",
+      `/inventory/objects/${TEST_OBJECT_ID}/test-checkout`,
+      {},
+    );
+    assert.equal(unset.status, 404);
+    testCheckoutObjectId = TEST_OBJECT_ID;
+    const missing = await mutate(
+      session,
+      "POST",
+      `/inventory/objects/${TEST_OBJECT_ID}/test-checkout`,
+      {},
+    );
+    assert.equal(missing.status, 404);
+    rows.push({
+      id: "15898afd-b977-48b6-adb3-5a1eed602468",
+      name: "Real pail",
+      description: "",
+      photoUrl: null,
+      priceAmount: 10000,
+      currency: "CAD",
+      publishedAt: null,
+      isTest: false,
+      status: "available",
+      createdAt: new Date("2026-11-11T00:00:00Z"),
+      updatedAt: new Date("2026-11-11T00:00:00Z"),
+    });
+    const realObject = await mutate(
+      session,
+      "POST",
+      "/inventory/objects/15898afd-b977-48b6-adb3-5a1eed602468/test-checkout",
+      {},
+    );
+    assert.equal(realObject.status, 404);
+    rows.push({
+      id: TEST_OBJECT_ID,
+      name: "Campaign Test Object $100",
+      description: "",
+      photoUrl: null,
+      priceAmount: 10000,
+      currency: "CAD",
+      publishedAt: new Date("2026-11-11T00:00:00Z"),
+      isTest: true,
+      status: "available",
+      createdAt: new Date("2026-11-11T00:00:00Z"),
+      updatedAt: new Date("2026-11-11T00:00:00Z"),
+    });
+    const published = await mutate(
+      session,
+      "POST",
+      `/inventory/objects/${TEST_OBJECT_ID}/test-checkout`,
+      {},
+    );
+    assert.equal(published.status, 404);
+    rows[rows.length - 1].publishedAt = null;
+    rows[rows.length - 1].status = "held";
+    const held = await mutate(
+      session,
+      "POST",
+      `/inventory/objects/${TEST_OBJECT_ID}/test-checkout`,
+      {},
+    );
+    assert.equal(held.status, 404);
+    rows[rows.length - 1].status = "available";
+    const reserved = await mutate(
+      session,
+      "POST",
+      `/inventory/objects/${TEST_OBJECT_ID}/test-checkout`,
+      {},
+    );
+    assert.equal(reserved.status, 201);
+    const body = (await reserved.json()) as {
+      reservationId: string;
+      holdExpiresAt: string;
+      checkoutUrl: string;
+    };
+    assert.equal(body.holdExpiresAt, "2026-11-11T20:30:00.000Z");
+    assert.equal(
+      body.checkoutUrl,
+      fareharborCheckoutUrl(
+        { itemId: "772245", flowId: "573099" },
+        "staff-test-checkout-ref",
+      ),
+    );
+    const duplicate = await mutate(
+      session,
+      "POST",
+      `/inventory/objects/${TEST_OBJECT_ID}/test-checkout`,
+      {},
+    );
+    assert.equal(duplicate.status, 404);
+    assert.deepEqual(testCheckoutCalls, [TEST_OBJECT_ID]);
+    const purchases = await fetch(`${baseUrl}/naming/reservations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ objectId: TEST_OBJECT_ID }),
+    });
+    assert.equal(purchases.status, 404);
+    assert.equal(publicCalls.reserve, 0);
+  });
+
+  test("a disabled campaign opens a naming link only for the configured test object", async () => {
+    reset();
+    testCheckoutObjectId = TEST_OBJECT_ID;
+    linkIdentity = { objectId: TEST_OBJECT_ID, isTest: true };
+    const spoofedHost = await fetch(`${baseUrl}/naming/links/${NAMING_TOKEN}`, {
+      headers: {
+        host: "giftcard.udderlyridiculousfarmlife.com",
+        "x-forwarded-host": "giftcard.udderlyridiculousfarmlife.com",
+      },
+    });
+    assert.equal(spoofedHost.status, 404);
+    assert.equal(publicCalls.identify, 0);
+    const wrongRoute = await fetch(`${baseUrl}/naming/links/${NAMING_TOKEN}`, {
+      headers: { "x-udderly-naming-route": "closed" },
+    });
+    assert.equal(wrongRoute.status, 404);
+    const otherToken = await fetch(`${baseUrl}/naming/links/${"b".repeat(43)}`, {
+      headers: { "x-udderly-naming-route": "giftcard" },
+    });
+    assert.equal(otherToken.status, 404);
+    linkIdentity = { objectId: "15898afd-b977-48b6-adb3-5a1eed602468", isTest: false };
+    const realObject = await fetch(`${baseUrl}/naming/links/${NAMING_TOKEN}`, {
+      headers: { "x-udderly-naming-route": "giftcard" },
+    });
+    assert.equal(realObject.status, 404);
+    linkIdentity = { objectId: TEST_OBJECT_ID, isTest: true };
+    const opened = await fetch(`${baseUrl}/naming/links/${NAMING_TOKEN}`, {
+      headers: {
+        "x-udderly-naming-route": "giftcard",
+        host: "goatbarn.udderlyridiculousfarmlife.com",
+        "x-forwarded-host": "goatbarn.udderlyridiculousfarmlife.com",
+      },
+    });
+    assert.equal(opened.status, 200);
+    const openedBody = (await opened.json()) as { objectName: string };
+    assert.equal(openedBody.objectName, "Campaign Test Object $100");
+    const closed = await fetch(`${baseUrl}/naming/links/${NAMING_TOKEN}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-udderly-naming-route": "giftcard",
+      },
+      body: JSON.stringify({ name: "Buttercup" }),
+    });
+    assert.equal(closed.status, 409);
+    testCheckoutObjectId = undefined;
+    const unset = await fetch(`${baseUrl}/naming/links/${NAMING_TOKEN}`, {
+      headers: { "x-udderly-naming-route": "giftcard" },
+    });
+    assert.equal(unset.status, 404);
   });
 
   test("held and claimed objects keep their price and cannot be published", async () => {
@@ -465,6 +639,12 @@ type InventoryBody = {
 function reset(): void {
   rows.splice(0, rows.length);
   failUpdates = 0;
+  testCheckoutCalls.splice(0, testCheckoutCalls.length);
+  testCheckoutObjectId = undefined;
+  linkIdentity = undefined;
+  publicCalls.list = 0;
+  publicCalls.reserve = 0;
+  publicCalls.identify = 0;
 }
 
 function jpeg(): Buffer {
@@ -623,10 +803,32 @@ const staffStub = {
   },
 };
 
+const reservationStub = {
+  async reserveTestObject(objectId: string) {
+    testCheckoutCalls.push(objectId);
+    const row = rows.find((item) => item.id === objectId);
+    if (row) {
+      row.status = "held";
+    }
+    return {
+      outcome: "reserved" as const,
+      reservationId: "6f1e0c2a-7b14-4d5e-9c10-123456789abc",
+      holdExpiresAt: new Date("2026-11-11T20:30:00.000Z"),
+      checkoutUrl: fareharborCheckoutUrl(
+        { itemId: "772245", flowId: "573099" },
+        "staff-test-checkout-ref",
+      ),
+    };
+  },
+};
+
 const envStub = {
   namingAdmin: { password: PASSWORD, sessionSecret: SESSION_SECRET },
   namingPhotoDir: photoDir,
   namingCampaignEnabled: false,
+  get namingTestCheckoutObjectId() {
+    return testCheckoutObjectId;
+  },
 };
 
 @Module({
@@ -648,9 +850,32 @@ const envStub = {
           publicCalls.list += 1;
           return { objects: [] };
         },
+        createReservation() {
+          publicCalls.reserve += 1;
+          return { outcome: "unpublished" };
+        },
+        identifyLink(token: string) {
+          publicCalls.identify += 1;
+          return token === NAMING_TOKEN ? linkIdentity : undefined;
+        },
+        resolveLink() {
+          return {
+            outcome: "resolved",
+            objectName: "Campaign Test Object $100",
+            description: "",
+            photoUrl: null,
+            namingStatus: "awaiting_name",
+            submittedName: null,
+            submissionOpen: true,
+          };
+        },
+        submitName() {
+          return { outcome: "deadline_closed" };
+        },
       },
     },
     { provide: NamingStaffService, useValue: staffStub },
+    { provide: NamingReservationService, useValue: reservationStub },
   ],
 })
 class InventoryTestModule implements NestModule {
@@ -671,6 +896,7 @@ class InventoryTestModule implements NestModule {
       useValue: { namingAdmin: undefined, namingPhotoDir: photoDir },
     },
     { provide: NamingStaffService, useValue: staffStub },
+    { provide: NamingReservationService, useValue: reservationStub },
   ],
 })
 class ClosedInventoryModule {}

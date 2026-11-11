@@ -163,6 +163,10 @@ export class EnvService {
     return this.env.NAMING_CAMPAIGN_ENABLED;
   }
 
+  get namingTestCheckoutObjectId(): string | undefined {
+    return this.env.NAMING_TEST_CHECKOUT_OBJECT_ID;
+  }
+
   get namingPreviewMode(): boolean {
     return this.env.NAMING_PREVIEW_MODE;
   }

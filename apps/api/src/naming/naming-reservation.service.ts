@@ -16,7 +16,10 @@ import {
 import { NAMING_HOLD_QUEUE } from "../queue/queue.constants";
 import { createCheckoutRef } from "./naming-checkout-ref";
 import { qualifiesForPurchaseDeadline } from "./naming-deadline";
-import { testObjectCheckoutAllowed } from "./naming-launch";
+import {
+  customerCheckoutAllowed,
+  staffTestCheckoutAllowed,
+} from "./naming-test-checkout";
 import {
   FAREHARBOR_TIER_CHECKOUTS,
   NAMING_CLOCK,
@@ -68,10 +71,33 @@ export class NamingReservationService {
   }
 
   async reserve(objectId: string): Promise<NamingReserveResult> {
+    return this.attempt(objectId, "customer");
+  }
+
+  async reserveTestObject(
+    objectId: string,
+    configuredObjectId: string,
+  ): Promise<NamingReserveResult> {
+    if (objectId !== configuredObjectId) {
+      return { outcome: "unpublished" };
+    }
+    return this.attempt(objectId, "test", configuredObjectId);
+  }
+
+  private async attempt(
+    objectId: string,
+    gate: "customer" | "test",
+    configuredObjectId?: string,
+  ): Promise<NamingReserveResult> {
     for (let attempt = 0; attempt < 5; attempt += 1) {
       const checkoutRef = createCheckoutRef();
       try {
-        const result = await this.reserveOnce(objectId, checkoutRef);
+        const result = await this.reserveOnce(
+          objectId,
+          checkoutRef,
+          gate,
+          configuredObjectId,
+        );
         if (result.outcome === "reserved") {
           await this.scheduleRelease(result.reservationId, result.holdExpiresAt);
         }
@@ -114,6 +140,8 @@ export class NamingReservationService {
   private async reserveOnce(
     objectId: string,
     checkoutRef: string,
+    gate: "customer" | "test",
+    configuredObjectId?: string,
   ): Promise<NamingReserveResult> {
     const now = this.clock();
     return this.database.db.transaction(async (tx) => {
@@ -127,10 +155,23 @@ export class NamingReservationService {
       }
 
       object = await expireCurrentHoldIfDue(tx, object, now);
-      if (object.isTest && !testObjectCheckoutAllowed(object)) {
-        return { outcome: "unpublished" };
-      }
-      if (!object.publishedAt) {
+      if (gate === "customer") {
+        if (!customerCheckoutAllowed(object)) {
+          return { outcome: "unpublished" };
+        }
+      } else if (!staffTestCheckoutAllowed(object, configuredObjectId)) {
+        const sameUnpublishedTest =
+          object.id === configuredObjectId &&
+          object.isTest &&
+          object.publishedAt === null;
+        if (
+          sameUnpublishedTest &&
+          (object.status !== "available" ||
+            object.heldReservationId ||
+            object.claimedReservationId)
+        ) {
+          return { outcome: "unavailable" };
+        }
         return { outcome: "unpublished" };
       }
       if (

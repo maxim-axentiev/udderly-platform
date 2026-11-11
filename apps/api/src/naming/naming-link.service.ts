@@ -111,6 +111,27 @@ export class NamingLinkService {
     });
   }
 
+  async identify(
+    token: string,
+  ): Promise<{ objectId: string; isTest: boolean } | undefined> {
+    const reservation = await this.findByToken(token);
+    if (!reservation || reservation.status !== "claimed") {
+      return undefined;
+    }
+    const [object] = await this.database.db
+      .select({
+        id: namingObjects.id,
+        isTest: namingObjects.isTest,
+      })
+      .from(namingObjects)
+      .where(eq(namingObjects.id, reservation.objectId))
+      .limit(1);
+    if (!object) {
+      return undefined;
+    }
+    return { objectId: object.id, isTest: object.isTest };
+  }
+
   async resolve(token: string): Promise<NamingLinkResolution> {
     const reservation = await this.findByToken(token);
     if (!reservation || reservation.status !== "claimed") {

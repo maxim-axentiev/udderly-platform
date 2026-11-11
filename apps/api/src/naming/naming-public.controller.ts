@@ -23,6 +23,11 @@ import {
 } from "./naming-deadline";
 import { NamingRateLimiter } from "./naming-rate-limit";
 import { NamingPublicService } from "./naming-public.service";
+import {
+  GIFT_CARD_NAMING_ROUTE_HEADER,
+  giftcardNamingRouteAllowed,
+  testNamingLinkAllowed,
+} from "./naming-test-checkout";
 
 const objectIdSchema = z.string().uuid();
 const reserveSchema = z.object({ objectId: objectIdSchema }).strict();
@@ -90,9 +95,8 @@ export class NamingPublicController {
 
   @Get("links/:token")
   @Header("Cache-Control", "no-store")
-  async resolve(@Param("token") token: string) {
-    this.assertEnabled();
-    if (!namingTokenPattern.test(token)) {
+  async resolve(@Param("token") token: string, @Req() request: Request) {
+    if (!namingTokenPattern.test(token) || !(await this.namingOpen(request, token))) {
       throw new NotFoundException();
     }
     const result = await this.naming.resolveLink(token);
@@ -117,11 +121,10 @@ export class NamingPublicController {
     @Body() body: unknown,
     @Req() request: Request,
   ) {
-    this.assertEnabled();
-    this.consume(request, "submit");
-    if (!namingTokenPattern.test(token)) {
+    if (!namingTokenPattern.test(token) || !(await this.namingOpen(request, token))) {
       throw new NotFoundException();
     }
+    this.consume(request, "submit");
     const parsed = submitSchema.safeParse(body);
     if (!parsed.success) {
       throw new BadRequestException("Enter a name.");
@@ -151,6 +154,29 @@ export class NamingPublicController {
     if (!this.env.namingCampaignEnabled) {
       throw new NotFoundException();
     }
+  }
+
+  private async namingOpen(request: Request, token: string): Promise<boolean> {
+    if (this.env.namingCampaignEnabled) {
+      return true;
+    }
+    const configuredObjectId = this.env.namingTestCheckoutObjectId;
+    if (
+      !configuredObjectId ||
+      !giftcardNamingRouteAllowed(request.headers[GIFT_CARD_NAMING_ROUTE_HEADER])
+    ) {
+      return false;
+    }
+    const identity = await this.naming.identifyLink(token);
+    return (
+      identity !== undefined &&
+      testNamingLinkAllowed({
+        configuredObjectId,
+        route: request.headers[GIFT_CARD_NAMING_ROUTE_HEADER],
+        objectId: identity.objectId,
+        isTest: identity.isTest,
+      })
+    );
   }
 
   private consume(request: Request, action: "reserve" | "submit"): void {

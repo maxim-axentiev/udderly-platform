@@ -1,11 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  TEST_CHECKOUT_ENABLED,
   countPublicCatalogObjects,
   isPublicCatalogObject,
   selectCustomerLaunchObjects,
-  testObjectCheckoutAllowed,
 } from "./naming-launch";
 
 test("test objects stay out of public counts and launch publication", () => {
@@ -23,6 +21,4 @@ test("test objects stay out of public counts and launch publication", () => {
   assert.equal(countPublicCatalogObjects(objects), 1);
   assert.equal(isPublicCatalogObject(objects[1]), true);
   assert.equal(isPublicCatalogObject(objects[3]), false);
-  assert.equal(TEST_CHECKOUT_ENABLED, false);
-  assert.equal(testObjectCheckoutAllowed(objects[3]), false);
 });

@@ -107,6 +107,8 @@ services:
       MAILCHIMP_API_KEY: ${MAILCHIMP_API_KEY:-}
       NAMING_CAMPAIGN_ENABLED: ${NAMING_CAMPAIGN_ENABLED:-false}
       NAMING_PREVIEW_MODE: ${NAMING_PREVIEW_MODE:-false}
+      # Empty closes staff test checkout. A UUID does not enable customer purchasing.
+      NAMING_TEST_CHECKOUT_OBJECT_ID: ${NAMING_TEST_CHECKOUT_OBJECT_ID:-}
       NAMING_FAREHARBOR_TIERS: ${NAMING_FAREHARBOR_TIERS:-}
       RESEND_API_KEY: ${RESEND_API_KEY:-}
       RESEND_FROM: ${RESEND_FROM:-}
@@ -148,6 +150,8 @@ services:
       - traefik.http.routers.udderly-platform-production.entrypoints=websecure
       - traefik.http.routers.udderly-platform-production.tls=true
       - traefik.http.routers.udderly-platform-production.tls.certresolver=letsencrypt
+      - traefik.http.routers.udderly-platform-production.middlewares=goatbarn-route
+      - traefik.http.middlewares.goatbarn-route.headers.customrequestheaders.X-Udderly-Naming-Route=closed
       - traefik.http.services.udderly-platform-production.loadbalancer.server.port=${API_PORT:-3001}
       - traefik.http.middlewares.giftcard-auth.basicauth.realm=Udderly gift card
       - traefik.http.middlewares.giftcard-auth.basicauth.users=${GIFT_CARD_BASIC_AUTH:-}
@@ -157,19 +161,23 @@ services:
       - traefik.http.routers.giftcard-naming.tls=true
       - traefik.http.routers.giftcard-naming.tls.certresolver=letsencrypt
       - traefik.http.routers.giftcard-naming.service=udderly-platform-production
-      - traefik.http.routers.giftcard-naming.middlewares=giftcard-auth
+      - traefik.http.routers.giftcard-naming.middlewares=giftcard-auth,giftcard-naming-route
+      - traefik.http.middlewares.giftcard-naming-route.headers.customrequestheaders.X-Udderly-Naming-Route=giftcard
       - traefik.http.routers.giftcard-inventory.rule=Host(`giftcard.udderlyridiculousfarmlife.com`) && PathPrefix(`/inventory/`)
       - traefik.http.routers.giftcard-inventory.priority=100
       - traefik.http.routers.giftcard-inventory.entrypoints=websecure
       - traefik.http.routers.giftcard-inventory.tls=true
       - traefik.http.routers.giftcard-inventory.tls.certresolver=letsencrypt
       - traefik.http.routers.giftcard-inventory.service=udderly-platform-production
+      - traefik.http.routers.giftcard-inventory.middlewares=giftcard-api-closed
       - traefik.http.routers.giftcard-photos.rule=Host(`giftcard.udderlyridiculousfarmlife.com`) && PathPrefix(`/photos/`)
       - traefik.http.routers.giftcard-photos.priority=100
       - traefik.http.routers.giftcard-photos.entrypoints=websecure
       - traefik.http.routers.giftcard-photos.tls=true
       - traefik.http.routers.giftcard-photos.tls.certresolver=letsencrypt
       - traefik.http.routers.giftcard-photos.service=udderly-platform-production
+      - traefik.http.routers.giftcard-photos.middlewares=giftcard-api-closed
+      - traefik.http.middlewares.giftcard-api-closed.headers.customrequestheaders.X-Udderly-Naming-Route=closed
 
   web:
     build:

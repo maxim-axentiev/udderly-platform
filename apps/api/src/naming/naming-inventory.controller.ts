@@ -24,8 +24,11 @@ import { access } from "node:fs/promises";
 import type { Request, Response } from "express";
 import { z } from "zod";
 import { EnvService } from "../config/env.service";
+import { PURCHASE_CLOSED_MESSAGE } from "./naming-deadline";
 import type { NamingObjectRecord } from "./naming-object.service";
 import { NamingObjectService } from "./naming-object.service";
+import { NamingReservationService } from "./naming-reservation.service";
+import { staffTestCheckoutAllowed } from "./naming-test-checkout";
 import {
   CERTIFICATE_RESEND_CONFIRMATION,
   NamingStaffService,
@@ -105,6 +108,8 @@ export class NamingInventoryController {
     @Inject(NamingRateLimiter) private readonly limiter: NamingRateLimiter,
     @Inject(InventorySessions) private readonly sessions: InventorySessions,
     @Inject(NamingStaffService) private readonly staff: NamingStaffService,
+    @Inject(NamingReservationService)
+    private readonly reservations: NamingReservationService,
   ) {}
 
   @Post("session")
@@ -333,6 +338,46 @@ export class NamingInventoryController {
       throw new ConflictException("Test objects stay unpublished.");
     }
     return toInventoryObject(result.object);
+  }
+
+  @Post("objects/:id/test-checkout")
+  @HttpCode(HttpStatus.CREATED)
+  @Header("Cache-Control", "no-store")
+  async testCheckout(@Param("id") id: string, @Req() request: Request) {
+    this.requireSession(request);
+    if (!objectIdSchema.safeParse(id).success) {
+      throw new NotFoundException();
+    }
+    const configuredObjectId = this.env.namingTestCheckoutObjectId;
+    const current = await this.findObject(id);
+    if (
+      !configuredObjectId ||
+      !current ||
+      !staffTestCheckoutAllowed(current, configuredObjectId)
+    ) {
+      throw new NotFoundException();
+    }
+    const result = await this.reservations.reserveTestObject(
+      id,
+      configuredObjectId,
+    );
+    if (result.outcome === "not_found" || result.outcome === "unpublished") {
+      throw new NotFoundException();
+    }
+    if (result.outcome === "unavailable") {
+      throw new ConflictException("This object is not available.");
+    }
+    if (result.outcome === "purchase_closed") {
+      throw new ConflictException(PURCHASE_CLOSED_MESSAGE);
+    }
+    if (result.outcome === "checkout_unavailable") {
+      throw new ConflictException("This object cannot be purchased right now.");
+    }
+    return {
+      reservationId: result.reservationId,
+      holdExpiresAt: result.holdExpiresAt.toISOString(),
+      checkoutUrl: result.checkoutUrl,
+    };
   }
 
   @Post("objects/:id/photo")
