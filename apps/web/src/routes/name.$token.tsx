@@ -102,7 +102,7 @@ function NamingPage() {
     link?.namingStatus === "named" ? link.submittedName : null;
 
   return (
-    <CampaignFrame>
+    <CampaignFrame navigation={false}>
       <JourneyPage
         eyebrow="Name That Thing!"
         title="Name this object"
@@ -110,11 +110,6 @@ function NamingPage() {
       >
         <p className="print-hidden text-sm text-body-copy">
           {CAMPAIGN_DEADLINE_NOTE}
-        </p>
-        <p className="print-hidden">
-          <a href="/" className="font-display font-extrabold uppercase text-headline underline">
-            All objects
-          </a>
         </p>
 
         {loading ? (

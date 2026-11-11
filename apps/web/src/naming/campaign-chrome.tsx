@@ -3,22 +3,36 @@ import type { ReactNode } from "react";
 
 import { Button } from "./button";
 
-export function CampaignHeader() {
+function CampaignLogo() {
+  return (
+    <img
+      src="/campaign/farm-logo.png"
+      alt="Udderly Ridiculous Farm Life"
+      width={1588}
+      height={629}
+      className="h-auto w-full"
+    />
+  );
+}
+
+export function CampaignHeader({ navigation = true }: { navigation?: boolean }) {
   return (
     <header className="no-print sticky top-0 z-40 border-b-2 border-headline bg-background">
       <div className="mx-auto flex min-h-20 max-w-[1500px] items-center justify-between gap-4 px-5 md:px-8">
-        <Link to="/" aria-label="Name That Thing! home" className="block w-32 shrink-0 md:w-40">
-          <img
-            src="/campaign/farm-logo.png"
-            alt="Udderly Ridiculous Farm Life"
-            width={1588}
-            height={629}
-            className="h-auto w-full"
-          />
-        </Link>
-        <Button asChild>
-          <a href="/#objects">Browse the Things</a>
-        </Button>
+        {navigation ? (
+          <Link to="/" aria-label="Name That Thing! home" className="block w-32 shrink-0 md:w-40">
+            <CampaignLogo />
+          </Link>
+        ) : (
+          <div className="w-32 shrink-0 md:w-40">
+            <CampaignLogo />
+          </div>
+        )}
+        {navigation ? (
+          <Button asChild>
+            <a href="/#objects">Browse the Things</a>
+          </Button>
+        ) : null}
       </div>
     </header>
   );
@@ -38,10 +52,16 @@ export function CampaignFooter() {
   );
 }
 
-export function CampaignFrame({ children }: { children: ReactNode }) {
+export function CampaignFrame({
+  children,
+  navigation = true,
+}: {
+  children: ReactNode;
+  navigation?: boolean;
+}) {
   return (
     <div className="min-h-screen">
-      <CampaignHeader />
+      <CampaignHeader navigation={navigation} />
       {children}
       <CampaignFooter />
     </div>
