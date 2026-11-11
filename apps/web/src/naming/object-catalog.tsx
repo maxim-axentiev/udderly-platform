@@ -5,9 +5,42 @@ import { cn } from "./cn";
 import { ObjectCard } from "./object-card";
 
 export const CAMPAIGN_TIERS = [10_000, 25_000, 50_000, 100_000] as const;
+const MIXED_TIER_ORDER = [100_000, 50_000, 25_000, 10_000] as const;
 
 function tierLabel(cents: number): string {
   return `$${(cents / 100).toLocaleString("en-CA")}`;
+}
+
+export function interleaveByTier(objects: readonly NamingObject[]): NamingObject[] {
+  const groups = new Map<number, NamingObject[]>();
+  const other: NamingObject[] = [];
+  for (const object of objects) {
+    if (MIXED_TIER_ORDER.includes(object.priceCents as (typeof MIXED_TIER_ORDER)[number])) {
+      const group = groups.get(object.priceCents) ?? [];
+      group.push(object);
+      groups.set(object.priceCents, group);
+    } else {
+      other.push(object);
+    }
+  }
+  const cursors = new Map<number, number>(MIXED_TIER_ORDER.map((tier) => [tier, 0]));
+  const mixed: NamingObject[] = [];
+  let remaining = objects.length - other.length;
+  while (remaining > 0) {
+    for (const tier of MIXED_TIER_ORDER) {
+      const group = groups.get(tier) ?? [];
+      const cursor = cursors.get(tier) ?? 0;
+      if (cursor < group.length) {
+        const next = group[cursor];
+        if (next) {
+          mixed.push(next);
+          cursors.set(tier, cursor + 1);
+          remaining -= 1;
+        }
+      }
+    }
+  }
+  return [...mixed, ...other];
 }
 
 export function ObjectCatalog({
@@ -22,10 +55,10 @@ export function ObjectCatalog({
   onClaim: (objectId: string) => void;
 }) {
   const [tier, setTier] = useState<number | "all">("all");
+  const ordered = useMemo(() => interleaveByTier(objects), [objects]);
   const visible = useMemo(
-    () =>
-      objects.filter((object) => tier === "all" || object.priceCents === tier),
-    [objects, tier],
+    () => ordered.filter((object) => tier === "all" || object.priceCents === tier),
+    [ordered, tier],
   );
   const options: { value: number | "all"; label: string }[] = [
     { value: "all", label: "All Objects" },

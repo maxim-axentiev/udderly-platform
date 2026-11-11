@@ -10,7 +10,6 @@ const STATE: Record<
   {
     label: string;
     button: string;
-    note: string | null;
     icon: typeof Check;
     badge: string;
     card: string;
@@ -21,7 +20,6 @@ const STATE: Record<
   available: {
     label: "Available",
     button: "Buy & Claim",
-    note: null,
     icon: Check,
     badge: "bg-status-available text-background",
     card: "bg-background chunky-card",
@@ -30,22 +28,20 @@ const STATE: Record<
   },
   held: {
     label: "On Hold",
-    button: "Currently on hold",
-    note: "Someone is checking out. It may become available again.",
+    button: "On Hold",
     icon: Clock,
-    badge: "bg-status-held text-headline",
-    card: "border-2 border-dashed border-headline/50 bg-farm-silver/60",
-    image: "grayscale opacity-60",
+    badge: "bg-headline/70 text-background",
+    card: "border-2 border-headline/30 bg-farm-silver/80",
+    image: "grayscale",
     srText: "Temporarily on hold by another customer. Not available right now.",
   },
   claimed: {
     label: "Claimed",
     button: "Claimed",
-    note: "Someone has secured this piece of farm history.",
     icon: Lock,
-    badge: "bg-status-claimed text-background",
-    card: "border-2 border-headline/40 bg-farm-beige",
-    image: "grayscale contrast-75 opacity-70",
+    badge: "bg-headline/70 text-background",
+    card: "border-2 border-headline/30 bg-farm-silver/80",
+    image: "grayscale",
     srText: "Already claimed. Someone has secured this piece of farm history.",
   },
 };
@@ -78,6 +74,8 @@ export function ObjectCard({
   const photo = safePhotoUrl(photoUrl);
   const canBuy = purchasingEnabled && availability === "available" && !pending;
   const price = formatCatalogPrice(priceCents);
+
+  const unavailable = availability !== "available";
 
   return (
     <article
@@ -112,17 +110,10 @@ export function ObjectCard({
         <span className="absolute right-3 top-3 rounded-full bg-headline px-3 py-1 font-display text-lg font-black text-background">
           {price}
         </span>
-        {availability === "held" ? (
-          <div aria-hidden="true" className="held-stripes absolute inset-0 flex items-center justify-center">
-            <span className="rounded-lg bg-background px-4 py-2 font-display text-2xl font-black uppercase text-headline shadow-[4px_4px_0_var(--headline)]">
-              On Hold
-            </span>
-          </div>
-        ) : null}
-        {availability === "claimed" ? (
-          <div aria-hidden="true" className="absolute inset-0 flex items-center justify-center bg-headline/30">
-            <span className="stamp-in -rotate-12 rounded-md border-4 border-primary-accent bg-background/90 px-5 py-1 font-display text-4xl font-black uppercase tracking-widest text-primary-accent">
-              Claimed
+        {unavailable ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-headline/45 px-4">
+            <span className="rounded-lg bg-background/95 px-4 py-2 text-center font-display text-3xl font-black uppercase text-headline">
+              {state.label}
             </span>
           </div>
         ) : null}
@@ -157,16 +148,16 @@ export function ObjectCard({
               Buy & Claim
             </Button>
           ) : (
-            <>
-              <Button className="w-full" variant="outline" disabled>
-                {pending ? "Reserving…" : state.button}
-              </Button>
-              {state.note ? (
-                <p className="mt-2 text-center text-xs font-medium text-muted-foreground">
-                  {state.note}
-                </p>
-              ) : null}
-            </>
+            <Button
+              className={cn(
+                "w-full",
+                unavailable && "border-headline/30 bg-farm-silver text-headline/60 shadow-none",
+              )}
+              variant="outline"
+              disabled
+            >
+              {pending ? "Reserving…" : state.button}
+            </Button>
           )}
         </div>
       </div>
