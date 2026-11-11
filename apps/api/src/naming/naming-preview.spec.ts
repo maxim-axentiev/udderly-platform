@@ -87,6 +87,17 @@ test("the preview catalogue keeps 74 real available objects and protected photos
       priceAmount: 10_000,
       status: "held",
     }),
+    source({
+      name: "Campaign Test Object $100",
+      priceAmount: 10_000,
+      isTest: true,
+    }),
+    source({
+      name: "Test Naming Bucket",
+      priceAmount: 2000,
+      status: "available",
+      isTest: true,
+    }),
   ];
   const catalog = selectPreviewCatalog(objects);
   assert.equal(catalog.length, 74);
@@ -100,6 +111,7 @@ test("the preview catalogue keeps 74 real available objects and protected photos
   );
   assert.equal(catalog.some((object) => object.name === "Published gate"), false);
   assert.equal(catalog.some((object) => object.name === "Held pail"), false);
+  assert.equal(catalog.some((object) => object.name === "Campaign Test Object $100"), false);
   for (const object of catalog) {
     assert.match(
       object.photoUrl ?? "",
@@ -226,6 +238,7 @@ function source(
     currency: "CAD",
     publishedAt: null,
     status: "available",
+    isTest: false,
     ...overrides,
   };
 }
@@ -245,6 +258,7 @@ function record(
     priceAmount,
     currency: "CAD",
     publishedAt,
+    isTest: false,
     status,
   };
 }

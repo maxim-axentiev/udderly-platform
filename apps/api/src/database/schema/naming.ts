@@ -41,6 +41,7 @@ export const namingObjects = pgTable(
     priceAmount: integer("price_amount").notNull(),
     currency: text("currency").notNull().default("CAD"),
     publishedAt: timestamptz("published_at"),
+    isTest: boolean("is_test").notNull().default(false),
     status: text("status")
       .notNull()
       .default("available")

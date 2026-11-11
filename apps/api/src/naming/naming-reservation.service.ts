@@ -16,6 +16,7 @@ import {
 import { NAMING_HOLD_QUEUE } from "../queue/queue.constants";
 import { createCheckoutRef } from "./naming-checkout-ref";
 import { qualifiesForPurchaseDeadline } from "./naming-deadline";
+import { testObjectCheckoutAllowed } from "./naming-launch";
 import {
   FAREHARBOR_TIER_CHECKOUTS,
   NAMING_CLOCK,
@@ -126,6 +127,9 @@ export class NamingReservationService {
       }
 
       object = await expireCurrentHoldIfDue(tx, object, now);
+      if (object.isTest && !testObjectCheckoutAllowed(object)) {
+        return { outcome: "unpublished" };
+      }
       if (!object.publishedAt) {
         return { outcome: "unpublished" };
       }

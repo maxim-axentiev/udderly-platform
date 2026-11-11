@@ -7,6 +7,7 @@ import {
   dollarsToCents,
   inventoryPhotoSrc,
   inventoryRequest,
+  staffCanPublish,
   type InventoryObject,
 } from "../naming/inventory";
 
@@ -472,12 +473,13 @@ function InventoryPage() {
                 <p className="mt-1 text-sm text-stone-700">
                   {availabilityLabel(object.availability)}
                   <span className="ml-2">{object.published ? "Published" : "Unpublished"}</span>
+                  {object.isTest ? <span className="ml-2">Test object</span> : null}
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button className="rounded border border-stone-300 px-3 py-2 text-sm" type="button" onClick={() => edit(object)}>
                     Edit
                   </button>
-                  {object.availability === "available" && !object.published ? (
+                  {staffCanPublish(object) ? (
                     <button
                       className="rounded border border-stone-300 px-3 py-2 text-sm"
                       type="button"

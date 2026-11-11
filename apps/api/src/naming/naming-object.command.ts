@@ -8,6 +8,7 @@ export type NamingObjectAddCommand = {
   priceAmount: number;
   photoUrl: string | null;
   publish: boolean;
+  isTest?: boolean;
 };
 
 export type NamingObjectEditCommand = {

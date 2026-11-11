@@ -7,6 +7,7 @@ export const NAMING_SCHEMA_MIGRATIONS = [
   "0012_naming.sql",
   "0013_naming_link_delivery.sql",
   "0014_naming_campaign_rules.sql",
+  "0016_naming_test_object.sql",
 ] as const;
 
 export async function applySqlMigrations(

@@ -10,6 +10,7 @@ type StoredObject = {
   priceAmount: number;
   currency: string;
   publishedAt: Date | null;
+  isTest: boolean;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -40,6 +41,19 @@ test("create leaves publishedAt null unless publish is requested", async () => {
     publish: true,
   });
   assert.ok(published.publishedAt instanceof Date);
+  assert.equal(published.isTest, false);
+
+  const testObject = await service.create({
+    action: "add",
+    name: "Campaign Test Object $100",
+    description: "",
+    priceAmount: 10000,
+    photoUrl: null,
+    publish: true,
+    isTest: true,
+  });
+  assert.equal(testObject.isTest, true);
+  assert.equal(testObject.publishedAt, null);
 });
 
 test("price edit is refused unless the object is available", async () => {
@@ -52,6 +66,7 @@ test("price edit is refused unless the object is available", async () => {
       priceAmount: 2000,
       currency: "CAD",
       publishedAt: null,
+      isTest: false,
       status: "held",
       createdAt: new Date("2026-11-03T00:00:00Z"),
       updatedAt: new Date("2026-11-03T00:00:00Z"),
@@ -65,6 +80,33 @@ test("price edit is refused unless the object is available", async () => {
   });
   assert.equal(result.outcome, "price_locked");
   assert.equal(rows[0].priceAmount, 2000);
+});
+
+test("a test object stays unpublished", async () => {
+  const rows: StoredObject[] = [
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      name: "Campaign Test Object $100",
+      description: "",
+      photoUrl: null,
+      priceAmount: 10000,
+      currency: "CAD",
+      publishedAt: null,
+      isTest: true,
+      status: "available",
+      createdAt: new Date("2026-11-03T00:00:00Z"),
+      updatedAt: new Date("2026-11-03T00:00:00Z"),
+    },
+  ];
+  const service = new NamingObjectService(fakeDatabase(rows) as never);
+  const result = await service.update({
+    action: "edit",
+    id: rows[0].id,
+    publish: true,
+  });
+  assert.equal(result.outcome, "test_object");
+  assert.equal(rows[0].publishedAt, null);
+  assert.equal(rows[0].isTest, true);
 });
 
 function fakeDatabase(rows: StoredObject[]) {

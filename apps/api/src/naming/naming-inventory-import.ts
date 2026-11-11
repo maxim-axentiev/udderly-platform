@@ -55,6 +55,7 @@ export type ExistingObject = {
   priceCents: number;
   availability: string;
   published: boolean;
+  isTest?: boolean;
 };
 
 export type InventoryApi = {
@@ -517,7 +518,11 @@ export function resolvePhotoPath(root: string, photoPath: string): string | unde
 }
 
 function isProtected(object: ExistingObject): boolean {
-  return PROTECTED_OBJECT_IDS.has(object.id) || PROTECTED_OBJECT_NAMES.has(object.name);
+  return (
+    object.isTest === true ||
+    PROTECTED_OBJECT_IDS.has(object.id) ||
+    PROTECTED_OBJECT_NAMES.has(object.name)
+  );
 }
 
 function protectedNote(object: ExistingObject): string {

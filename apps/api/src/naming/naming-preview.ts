@@ -1,3 +1,4 @@
+import { isPreviewCustomerObject } from "./naming-launch";
 import type { PublicNamingObject } from "./naming-public.service";
 
 const PREVIEW_EXCLUDED_NAME = "test naming bucket";
@@ -14,6 +15,7 @@ export type PreviewSourceObject = {
   currency: string;
   publishedAt: Date | null;
   status: string;
+  isTest: boolean;
 };
 
 export function previewRequestAllowed(input: {
@@ -32,8 +34,7 @@ export function previewRequestAllowed(input: {
 
 export function isPreviewCatalogObject(object: PreviewSourceObject): boolean {
   return (
-    object.publishedAt === null &&
-    object.status === "available" &&
+    isPreviewCustomerObject(object) &&
     object.name.trim().toLowerCase() !== PREVIEW_EXCLUDED_NAME
   );
 }

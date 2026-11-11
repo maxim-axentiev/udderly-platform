@@ -9,7 +9,16 @@ export type InventoryObject = {
   currency: string;
   availability: "available" | "held" | "claimed";
   published: boolean;
+  isTest: boolean;
 };
+
+export function staffCanPublish(object: {
+  isTest: boolean;
+  availability: string;
+  published: boolean;
+}): boolean {
+  return !object.isTest && object.availability === "available" && !object.published;
+}
 
 export class InventoryError extends Error {
   readonly status: number;

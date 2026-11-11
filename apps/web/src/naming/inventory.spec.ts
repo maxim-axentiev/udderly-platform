@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { centsToDollars, dollarsToCents, inventoryPhotoSrc } from "./inventory";
+import { centsToDollars, dollarsToCents, inventoryPhotoSrc, staffCanPublish } from "./inventory";
 
 test("staff prices use CAD cents and reject extra fractions", () => {
   assert.equal(dollarsToCents("20"), 2000);
@@ -21,5 +21,13 @@ test("staff prices use CAD cents and reject extra fractions", () => {
   assert.equal(
     inventoryPhotoSrc("https://example.invalid/gate.jpg"),
     "https://example.invalid/gate.jpg",
+  );
+  assert.equal(
+    staffCanPublish({ isTest: false, availability: "available", published: false }),
+    true,
+  );
+  assert.equal(
+    staffCanPublish({ isTest: true, availability: "available", published: false }),
+    false,
   );
 });

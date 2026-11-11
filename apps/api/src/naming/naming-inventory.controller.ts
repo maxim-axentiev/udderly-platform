@@ -61,6 +61,7 @@ const createSchema = z
     name: z.string().trim().min(1).max(120),
     description: z.string().trim().max(2000).default(""),
     priceCents: priceSchema,
+    isTest: z.boolean().optional().default(false),
   })
   .strict();
 const correctionSchema = z.object({ name: z.string().max(200) }).strict();
@@ -93,6 +94,7 @@ type InventoryObject = {
   currency: string;
   availability: string;
   published: boolean;
+  isTest: boolean;
 };
 
 @Controller("inventory")
@@ -276,6 +278,7 @@ export class NamingInventoryController {
       priceAmount: parsed.data.priceCents,
       photoUrl: null,
       publish: false,
+      isTest: parsed.data.isTest,
     });
     return toInventoryObject(created);
   }
@@ -325,6 +328,9 @@ export class NamingInventoryController {
       throw new ConflictException(
         "The price cannot change while this object is held or claimed.",
       );
+    }
+    if (result.outcome === "test_object") {
+      throw new ConflictException("Test objects stay unpublished.");
     }
     return toInventoryObject(result.object);
   }
@@ -466,6 +472,7 @@ export class NamingPhotoController {
     if (
       !stored ||
       !object?.publishedAt ||
+      object.isTest ||
       object.photoUrl?.toLowerCase() !== expected
     ) {
       throw new NotFoundException();
@@ -491,6 +498,7 @@ function toInventoryObject(object: NamingObjectRecord): InventoryObject {
     currency: object.currency,
     availability: object.status,
     published: object.publishedAt !== null,
+    isTest: object.isTest,
   };
 }
 

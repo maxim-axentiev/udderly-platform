@@ -69,6 +69,10 @@ async function run(
     );
     return true;
   }
+  if (result.outcome === "test_object") {
+    console.error("Refused: test objects stay unpublished.");
+    return true;
+  }
   console.log(`Updated naming object ${result.object.id}`);
   console.log(formatObject(result.object));
   return false;
@@ -83,6 +87,7 @@ function formatObject(row: NamingObjectRecord): string {
     `currency: ${row.currency}`,
     `photo_url: ${row.photoUrl ?? ""}`,
     `published: ${row.publishedAt ? "yes" : "no"}`,
+    `test: ${row.isTest ? "yes" : "no"}`,
     `status: ${row.status}`,
   ].join("\n");
 }

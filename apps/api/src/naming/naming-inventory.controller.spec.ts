@@ -88,6 +88,7 @@ type StoredObject = {
   priceAmount: number;
   currency: string;
   publishedAt: Date | null;
+  isTest?: boolean;
   status: string;
   createdAt: Date;
   updatedAt: Date;
@@ -219,6 +220,7 @@ describe("inventory routes", { concurrency: false }, () => {
     assert.equal(body.availability, "available");
     assert.equal(body.priceCents, 2000);
     assert.equal(body.photoUrl, null);
+    assert.equal(body.isTest, false);
     assert.equal(forbiddenFields(body), false);
     const listed = await fetch(`${baseUrl}/inventory/objects`, {
       headers: { cookie: session.cookie },
@@ -227,6 +229,34 @@ describe("inventory routes", { concurrency: false }, () => {
     const catalog = (await listed.json()) as { objects: InventoryBody[] };
     assert.equal(catalog.objects.length, 1);
     assert.equal(forbiddenFields(catalog), false);
+  });
+
+  test("staff can see a test object and cannot publish it", async () => {
+    reset();
+    const session = await login("203.0.113.21");
+    const created = await mutate(session, "POST", "/inventory/objects", {
+      name: "Campaign Test Object $100",
+      description: "",
+      priceCents: 10000,
+      isTest: true,
+    });
+    assert.equal(created.status, 201);
+    const body = (await created.json()) as InventoryBody;
+    assert.equal(body.isTest, true);
+    assert.equal(body.published, false);
+    assert.equal(body.priceCents, 10000);
+    const listed = await fetch(`${baseUrl}/inventory/objects`, {
+      headers: { cookie: session.cookie },
+    });
+    const catalog = (await listed.json()) as { objects: InventoryBody[] };
+    assert.equal(catalog.objects.length, 1);
+    assert.equal(catalog.objects[0]?.isTest, true);
+    const published = await mutate(session, "PATCH", `/inventory/objects/${body.id}`, {
+      published: true,
+    });
+    assert.equal(published.status, 409);
+    assert.equal(rows[0]?.publishedAt, null);
+    assert.equal(rows[0]?.isTest, true);
   });
 
   test("held and claimed objects keep their price and cannot be published", async () => {
@@ -429,6 +459,7 @@ type InventoryBody = {
   currency: string;
   availability: string;
   published: boolean;
+  isTest: boolean;
 };
 
 function reset(): void {

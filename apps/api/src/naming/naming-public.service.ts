@@ -5,6 +5,7 @@ import {
   namingObjects,
   namingReservations,
 } from "../database/schema/naming";
+import { isCustomerNamingObject } from "./naming-launch";
 import { NamingLinkService } from "./naming-link.service";
 import { NamingReservationService } from "./naming-reservation.service";
 import { NAMING_CLOCK } from "./naming.constants";
@@ -61,11 +62,22 @@ export class NamingPublicService {
         priceCents: namingObjects.priceAmount,
         currency: namingObjects.currency,
         availability: namingObjects.status,
+        isTest: namingObjects.isTest,
       })
       .from(namingObjects)
       .where(isNotNull(namingObjects.publishedAt))
       .orderBy(namingObjects.name);
-    return { objects };
+    return {
+      objects: objects.filter(isCustomerNamingObject).map((object) => ({
+        id: object.id,
+        name: object.name,
+        description: object.description,
+        photoUrl: object.photoUrl,
+        priceCents: object.priceCents,
+        currency: object.currency,
+        availability: object.availability,
+      })),
+    };
   }
 
   createReservation(objectId: string) {

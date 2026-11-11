@@ -186,4 +186,14 @@ test("naming drizzle tables expose the same constraint names", () => {
   assert.equal(noticeNames.has("email"), false);
   assert.equal(revisionNames.has("naming_token"), false);
   assert.equal(names.has("naming_reservation_link_resend_state"), true);
+  const testObjectSql = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../../drizzle/0016_naming_test_object.sql"),
+    "utf8",
+  );
+  assert.match(testObjectSql, /ADD COLUMN "is_test" boolean DEFAULT false NOT NULL/);
+  assert.match(testObjectSql, /lower\(btrim\("name"\)\) = 'test naming bucket'/);
+  assert.equal(
+    objectConfig.columns.some((column) => column.name === "is_test" && column.notNull),
+    true,
+  );
 });

@@ -106,6 +106,13 @@
       "when": 1789511000000,
       "tag": "0014_naming_campaign_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1789513000000,
+      "tag": "0016_naming_test_object",
+      "breakpoints": true
     }
   ]
 }

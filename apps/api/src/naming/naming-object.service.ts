@@ -15,13 +15,15 @@ export type NamingObjectRecord = {
   priceAmount: number;
   currency: string;
   publishedAt: Date | null;
+  isTest: boolean;
   status: string;
 };
 
 export type NamingObjectWriteResult =
   | { outcome: "created" | "updated"; object: NamingObjectRecord }
   | { outcome: "not_found" }
-  | { outcome: "price_locked" };
+  | { outcome: "price_locked" }
+  | { outcome: "test_object" };
 
 @Injectable()
 export class NamingObjectService {
@@ -38,7 +40,8 @@ export class NamingObjectService {
         photoUrl: command.photoUrl,
         priceAmount: command.priceAmount,
         currency: "CAD",
-        publishedAt: command.publish ? new Date() : null,
+        publishedAt: command.isTest === true || !command.publish ? null : new Date(),
+        isTest: command.isTest === true,
         status: "available",
       })
       .returning();
@@ -67,6 +70,9 @@ export class NamingObjectService {
       existing.status !== "available"
     ) {
       return { outcome: "price_locked" };
+    }
+    if (command.publish === true && existing.isTest) {
+      return { outcome: "test_object" };
     }
 
     const [row] = await this.database.db
@@ -99,6 +105,7 @@ function toRecord(row: {
   priceAmount: number;
   currency: string;
   publishedAt: Date | null;
+  isTest: boolean;
   status: string;
 }): NamingObjectRecord {
   return {
@@ -109,6 +116,7 @@ function toRecord(row: {
     priceAmount: row.priceAmount,
     currency: row.currency,
     publishedAt: row.publishedAt,
+    isTest: row.isTest,
     status: row.status,
   };
 }
