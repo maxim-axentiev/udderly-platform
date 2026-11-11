@@ -175,8 +175,8 @@ function WhatYouGet() {
       <div className="mx-auto mt-12 grid max-w-6xl gap-8 lg:grid-cols-[1.1fr_1fr] lg:items-center">
         <div className="chunky-card rounded-3xl bg-farm-beige p-6 md:p-8">
           <img
-            src="/campaign/highland-cows.png"
-            alt="Two mini Highland cows cuddling at the farm"
+            src="/campaign/goat-certificate.png"
+            alt="A smiling goat on an Udderly Ridiculous gift certificate"
             width={1200}
             height={1200}
             loading="lazy"
@@ -400,8 +400,8 @@ function Faq() {
       <SectionTitle kicker="Good questions" title="Frequently Asked Questions" />
       <div className="mx-auto mt-10 grid max-w-6xl gap-10 lg:grid-cols-[1fr_1.6fr]">
         <img
-          src="/campaign/goat-certificate.png"
-          alt="A smiling goat on an Udderly Ridiculous gift certificate"
+          src="/campaign/highland-cows.png"
+          alt="Two mini Highland cows cuddling at the farm"
           width={1200}
           height={1200}
           loading="lazy"
