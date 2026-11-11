@@ -89,6 +89,12 @@ export async function fetchNamingObjects(
   return parseCatalog(await requestJson("/naming/objects", { signal }));
 }
 
+export async function fetchPreviewCatalog(
+  signal?: AbortSignal,
+): Promise<NamingObject[]> {
+  return parseCatalog(await requestJson("/naming/preview/catalog", { signal }));
+}
+
 export async function createReservation(
   objectId: string,
 ): Promise<CreatedReservation> {

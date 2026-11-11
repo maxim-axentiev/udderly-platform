@@ -5,7 +5,9 @@ import { renderToStaticMarkup } from "react-dom/server";
 
 import { CampaignHome } from "./home-sections";
 import { ObjectCatalog } from "./object-catalog";
+import { filterByPrice } from "./format";
 import { previewObjects } from "./preview";
+import type { NamingObject } from "./api";
 
 test("mobile tier filters stay in a two-column grid", () => {
   const html = renderToStaticMarkup(
@@ -33,3 +35,57 @@ test("the campaign terms link has at least a 44px hit area", () => {
     /inline-flex min-h-11 items-center[\s\S]{0,240}Read the full FAQs &amp; campaign terms/,
   );
 });
+
+test("a disabled preview card loads its protected photo and cannot purchase", () => {
+  const photo =
+    "/naming/preview/photos/11111111-1111-4111-8111-111111111111.jpg";
+  const html = renderToStaticMarkup(
+    createElement(ObjectCatalog, {
+      objects: [
+        {
+          id: "11111111-1111-4111-8111-111111111111",
+          name: "Blue Bucket",
+          description: "A real bucket",
+          photoUrl: photo,
+          priceCents: 10_000,
+          currency: "CAD",
+          availability: "available",
+        },
+      ],
+      purchasingEnabled: false,
+      pendingId: null,
+      onClaim: () => {
+        throw new Error("purchase");
+      },
+    }),
+  );
+  assert.match(html, new RegExp(`src="${photo}"`));
+  assert.match(html, /disabled=""/);
+  assert.equal(html.includes("fareharbor.com"), false);
+});
+
+test("tier filters count the full catalogue", () => {
+  const objects: NamingObject[] = [
+    ...tier("100", 32, 10_000),
+    ...tier("250", 32, 25_000),
+    ...tier("500", 8, 50_000),
+    ...tier("1000", 2, 100_000),
+  ];
+  assert.equal(objects.length, 74);
+  assert.equal(filterByPrice(objects, 10_000).length, 32);
+  assert.equal(filterByPrice(objects, 25_000).length, 32);
+  assert.equal(filterByPrice(objects, 50_000).length, 8);
+  assert.equal(filterByPrice(objects, 100_000).length, 2);
+});
+
+function tier(label: string, count: number, priceCents: number): NamingObject[] {
+  return Array.from({ length: count }, (_, index) => ({
+    id: `${label}-${index}`,
+    name: `${label} ${index}`,
+    description: "",
+    photoUrl: null,
+    priceCents,
+    currency: "CAD",
+    availability: "available" as const,
+  }));
+}

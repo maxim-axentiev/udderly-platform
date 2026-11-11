@@ -67,6 +67,8 @@ export function availabilityLabel(availability: NamingAvailability): string {
 
 const STORED_PHOTO =
   /^\/photos\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i;
+const PREVIEW_PHOTO =
+  /^\/naming\/preview\/photos\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i;
 const STAFF_PHOTO =
   /^\/inventory\/photos\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(jpg|png|webp)$/i;
 
@@ -74,7 +76,7 @@ export function safePhotoUrl(value: string | null): string | null {
   if (!value) {
     return null;
   }
-  if (STORED_PHOTO.test(value) || STAFF_PHOTO.test(value)) {
+  if (STORED_PHOTO.test(value) || PREVIEW_PHOTO.test(value) || STAFF_PHOTO.test(value)) {
     return value;
   }
   try {

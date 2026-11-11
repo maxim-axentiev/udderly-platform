@@ -26,6 +26,7 @@ import { NamingInventoryController, NamingPhotoController } from "./naming-inven
 import { applyInventoryPhotoParser } from "./naming-inventory.photo";
 import { InventorySessions } from "./naming-inventory.sessions";
 import { NamingObjectService } from "./naming-object.service";
+import { NamingPreviewController } from "./naming-preview.controller";
 import { NamingPublicController } from "./naming-public.controller";
 import { NamingPublicService } from "./naming-public.service";
 import { NamingRateLimiter } from "./naming-rate-limit";
@@ -45,6 +46,7 @@ import { FAREHARBOR_TIER_CHECKOUTS, NAMING_CLOCK } from "./naming.constants";
   ],
   controllers: [
     NamingPublicController,
+    NamingPreviewController,
     NamingInventoryController,
     NamingPhotoController,
   ],

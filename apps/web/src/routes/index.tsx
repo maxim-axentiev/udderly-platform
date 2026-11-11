@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   createReservation,
   fetchNamingObjects,
+  fetchPreviewCatalog,
   isAbortError,
   namingErrorMessage,
   type NamingObject,
@@ -13,7 +14,11 @@ import { loadFareharborCheckoutAllowList } from "../naming/fareharbor-checkout";
 import { isFareharborCheckoutUrl } from "../naming/format";
 import { CampaignHome } from "../naming/home-sections";
 import { ObjectCatalog } from "../naming/object-catalog";
-import { loadCampaignPreview } from "../naming/preview";
+import {
+  canPurchaseInPreview,
+  loadCampaignPreview,
+  PREVIEW_BANNER,
+} from "../naming/preview";
 
 export const Route = createFileRoute("/")({
   loader: async () => {
@@ -32,18 +37,16 @@ export const Route = createFileRoute("/")({
 function HomePage() {
   const { preview, checkoutAllowList } = Route.useLoaderData();
   const navigate = useNavigate();
-  const [objects, setObjects] = useState<NamingObject[] | null>(
-    preview.enabled ? preview.objects : null,
-  );
+  const [objects, setObjects] = useState<NamingObject[] | null>(null);
   const [error, setError] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (preview.enabled) {
-      return;
-    }
     const controller = new AbortController();
-    void fetchNamingObjects(controller.signal)
+    const load = preview.enabled
+      ? fetchPreviewCatalog(controller.signal)
+      : fetchNamingObjects(controller.signal);
+    void load
       .then((next) => {
         setObjects(next);
         setError("");
@@ -56,7 +59,9 @@ function HomePage() {
         setError(
           namingErrorMessage(
             caught,
-            "This campaign is not available right now.",
+            preview.enabled
+              ? "The preview catalogue could not be loaded."
+              : "This campaign is not available right now.",
           ),
         );
       });
@@ -64,6 +69,9 @@ function HomePage() {
   }, [preview.enabled]);
 
   async function reserve(objectId: string) {
+    if (!canPurchaseInPreview(preview.enabled)) {
+      return;
+    }
     const popup = window.open("", "_blank");
     setPendingId(objectId);
     setError("");
@@ -107,8 +115,7 @@ function HomePage() {
           <>
             {preview.enabled ? (
               <p className="mb-6 rounded-2xl border-2 border-headline bg-background px-4 py-3 text-sm text-body-copy">
-                This is a private preview. The objects are samples, and Buy
-                & Claim is turned off.
+                {PREVIEW_BANNER}
               </p>
             ) : null}
             {error ? (
@@ -123,7 +130,7 @@ function HomePage() {
             ) : (
               <ObjectCatalog
                 objects={objects}
-                purchasingEnabled={!preview.enabled}
+                purchasingEnabled={canPurchaseInPreview(preview.enabled)}
                 pendingId={pendingId}
                 onClaim={(objectId) => void reserve(objectId)}
               />

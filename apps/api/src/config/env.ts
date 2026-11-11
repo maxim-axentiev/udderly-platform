@@ -66,6 +66,14 @@ const envSchema = z.object({
       return value;
     }, z.enum(["true", "false"]))
     .transform((value) => value === "true"),
+  NAMING_PREVIEW_MODE: z
+    .preprocess((value) => {
+      if (value === undefined || value === "") {
+        return "false";
+      }
+      return value;
+    }, z.enum(["true", "false"]))
+    .transform((value) => value === "true"),
 }).superRefine((value, context) => {
   requireTogether(
     context,

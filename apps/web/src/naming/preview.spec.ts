@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { isNamingPreviewMode, previewObjects } from "./preview";
+import { canPurchaseInPreview, isNamingPreviewMode, PREVIEW_BANNER, previewObjects } from "./preview";
 
 test("preview mode is on only for the exact true value", () => {
   assert.equal(isNamingPreviewMode("true"), true);
@@ -8,6 +8,10 @@ test("preview mode is on only for the exact true value", () => {
   assert.equal(isNamingPreviewMode(""), false);
   assert.equal(isNamingPreviewMode(undefined), false);
   assert.equal(isNamingPreviewMode("TRUE"), false);
+  assert.equal(canPurchaseInPreview(true), false);
+  assert.equal(canPurchaseInPreview(false), true);
+  assert.equal(PREVIEW_BANNER.includes("samples"), false);
+  assert.match(PREVIEW_BANNER, /Buy & Claim is turned off/);
 });
 
 test("preview catalog uses the four campaign tiers and sample states", () => {

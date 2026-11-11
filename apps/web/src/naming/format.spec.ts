@@ -64,6 +64,13 @@ test("photo urls accept only http addresses", () => {
     safePhotoUrl("/photos/11111111-1111-4111-8111-111111111111.jpg"),
     "/photos/11111111-1111-4111-8111-111111111111.jpg",
   );
+  assert.equal(
+    safePhotoUrl(
+      "/naming/preview/photos/11111111-1111-4111-8111-111111111111.jpg",
+    ),
+    "/naming/preview/photos/11111111-1111-4111-8111-111111111111.jpg",
+  );
+  assert.equal(safePhotoUrl("/naming/preview/photos/../secret.jpg"), null);
   assert.equal(safePhotoUrl("/photos/../secret.jpg"), null);
   assert.equal(safePhotoUrl("/photos/note.svg"), null);
   assert.equal(

@@ -163,6 +163,10 @@ export class EnvService {
     return this.env.NAMING_CAMPAIGN_ENABLED;
   }
 
+  get namingPreviewMode(): boolean {
+    return this.env.NAMING_PREVIEW_MODE;
+  }
+
   get fareharborTierCheckouts() {
     return parseFareharborTierCheckouts(this.env.NAMING_FAREHARBOR_TIERS);
   }
