@@ -17,7 +17,6 @@ import { ObjectCatalog } from "../naming/object-catalog";
 import {
   canPurchaseInPreview,
   loadCampaignPreview,
-  PREVIEW_BANNER,
 } from "../naming/preview";
 
 export const Route = createFileRoute("/")({
@@ -113,11 +112,6 @@ function HomePage() {
       <CampaignHome
         catalog={
           <>
-            {preview.enabled ? (
-              <p className="mb-6 rounded-2xl border-2 border-headline bg-background px-4 py-3 text-sm text-body-copy">
-                {PREVIEW_BANNER}
-              </p>
-            ) : null}
             {error ? (
               <p role="alert" className="mb-6 text-headline">
                 {error}

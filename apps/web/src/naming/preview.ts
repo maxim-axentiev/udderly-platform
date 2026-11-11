@@ -9,9 +9,6 @@ export function canPurchaseInPreview(previewEnabled: boolean): boolean {
   return !previewEnabled;
 }
 
-export const PREVIEW_BANNER =
-  "This is a private preview of the real objects. Buy & Claim is turned off.";
-
 export const previewObjects: NamingObject[] = [
   {
     id: "preview-bucket",
