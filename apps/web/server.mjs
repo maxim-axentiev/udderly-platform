@@ -8,6 +8,8 @@ const host = "0.0.0.0";
 const clientRoot = fileURLToPath(new URL("./dist/client/", import.meta.url));
 const app = (await import("./dist/server/server.js")).default;
 
+const ROBOTS_HEADER = "noindex, nofollow";
+
 const contentTypes = new Map([
   [".css", "text/css; charset=utf-8"],
   [".js", "text/javascript; charset=utf-8"],
@@ -53,6 +55,7 @@ function clientFile(url) {
 
 function send(res, response) {
   res.statusCode = response.status;
+  res.setHeader("x-robots-tag", ROBOTS_HEADER);
   response.headers.forEach((value, key) => {
     if (key !== "set-cookie") {
       res.setHeader(key, value);
@@ -94,6 +97,7 @@ const server = createServer(async (req, res) => {
         "cache-control": asset
           ? "public, max-age=31536000, immutable"
           : "no-cache",
+        "x-robots-tag": ROBOTS_HEADER,
       });
       createReadStream(file).pipe(res);
       return;

@@ -6,6 +6,7 @@ import {
   Scripts,
   createRootRoute,
 } from "@tanstack/react-router";
+import { ROBOTS_DIRECTIVE } from "../naming/robots";
 import appCss from "../styles.css?url";
 
 export const Route = createRootRoute({
@@ -16,6 +17,7 @@ export const Route = createRootRoute({
         name: "viewport",
         content: "width=device-width, initial-scale=1",
       },
+      { name: "robots", content: ROBOTS_DIRECTIVE },
       { title: "Udderly Platform" },
     ],
     links: [

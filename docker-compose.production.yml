@@ -155,13 +155,14 @@ services:
       - traefik.http.services.udderly-platform-production.loadbalancer.server.port=${API_PORT:-3001}
       - traefik.http.middlewares.giftcard-auth.basicauth.realm=Udderly gift card
       - traefik.http.middlewares.giftcard-auth.basicauth.users=${GIFT_CARD_BASIC_AUTH:-}
+      - traefik.http.middlewares.giftcard-robots.headers.customresponseheaders.X-Robots-Tag=noindex, nofollow
       - traefik.http.routers.giftcard-naming.rule=Host(`giftcard.udderlyridiculousfarmlife.com`) && PathPrefix(`/naming`)
       - traefik.http.routers.giftcard-naming.priority=100
       - traefik.http.routers.giftcard-naming.entrypoints=websecure
       - traefik.http.routers.giftcard-naming.tls=true
       - traefik.http.routers.giftcard-naming.tls.certresolver=letsencrypt
       - traefik.http.routers.giftcard-naming.service=udderly-platform-production
-      - traefik.http.routers.giftcard-naming.middlewares=giftcard-auth,giftcard-naming-route
+      - traefik.http.routers.giftcard-naming.middlewares=giftcard-auth,giftcard-naming-route,giftcard-robots
       - traefik.http.middlewares.giftcard-naming-route.headers.customrequestheaders.X-Udderly-Naming-Route=giftcard
       - traefik.http.routers.giftcard-inventory.rule=Host(`giftcard.udderlyridiculousfarmlife.com`) && PathPrefix(`/inventory/`)
       - traefik.http.routers.giftcard-inventory.priority=100
@@ -176,7 +177,7 @@ services:
       - traefik.http.routers.giftcard-photos.tls=true
       - traefik.http.routers.giftcard-photos.tls.certresolver=letsencrypt
       - traefik.http.routers.giftcard-photos.service=udderly-platform-production
-      - traefik.http.routers.giftcard-photos.middlewares=giftcard-api-closed
+      - traefik.http.routers.giftcard-photos.middlewares=giftcard-api-closed,giftcard-robots
       - traefik.http.middlewares.giftcard-api-closed.headers.customrequestheaders.X-Udderly-Naming-Route=closed
 
   web:
@@ -213,7 +214,7 @@ services:
       - traefik.http.routers.giftcard-web.entrypoints=websecure
       - traefik.http.routers.giftcard-web.tls=true
       - traefik.http.routers.giftcard-web.tls.certresolver=letsencrypt
-      - traefik.http.routers.giftcard-web.middlewares=giftcard-auth
+      - traefik.http.routers.giftcard-web.middlewares=giftcard-auth,giftcard-robots
       - traefik.http.services.giftcard-web.loadbalancer.server.port=3000
 
 networks:
