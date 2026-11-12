@@ -112,9 +112,21 @@ export function ObjectCard({
         </span>
         {unavailable ? (
           <div className="absolute inset-0 flex items-center justify-center bg-headline/45 px-4">
-            <span className="rounded-lg bg-background/95 px-4 py-2 text-center font-display text-3xl font-black uppercase text-headline">
-              {state.label}
-            </span>
+            {availability === "held" ? (
+              <div className="max-w-xs rounded-lg bg-background/95 px-4 py-3 text-center">
+                <span className="block font-display text-3xl font-black uppercase text-headline">
+                  {state.label}
+                </span>
+                <span className="mt-2 block text-sm font-semibold leading-snug text-headline">
+                  Someone is currently trying to claim this item. It may become
+                  available again.
+                </span>
+              </div>
+            ) : (
+              <span className="rounded-lg bg-background/95 px-4 py-2 text-center font-display text-3xl font-black uppercase text-headline">
+                {state.label}
+              </span>
+            )}
           </div>
         ) : null}
       </div>

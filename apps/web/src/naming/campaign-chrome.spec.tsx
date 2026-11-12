@@ -19,4 +19,6 @@ test("the naming page keeps the logo and removes navigation", () => {
   assert.doesNotMatch(html, /Browse the Things/);
   assert.doesNotMatch(html, /All objects/i);
   assert.match(html, /Name That Thing!/);
+  assert.match(html, /processed through our checkout/);
+  assert.equal(html.includes("FareHarbor"), false);
 });

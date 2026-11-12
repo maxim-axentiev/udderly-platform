@@ -21,7 +21,7 @@ export function namingNoticeMessage(
         "",
         `The purchase is below the ${minimum} minimum for naming rights, so this gift card does not include a naming link or certificate.`,
         "",
-        "FareHarbor delivers the gift card itself in a separate message.",
+        "The gift card itself arrives in a separate email from our checkout.",
       ].join("\n"),
     };
   }
@@ -34,7 +34,7 @@ export function namingNoticeMessage(
       "",
       `Naming rights for ${objectName} required a gift card of at least ${minimum}.`,
       "",
-      "FareHarbor delivers the gift card itself in a separate message.",
+      "The gift card itself arrives in a separate email from our checkout.",
     ].join("\n"),
   };
 }

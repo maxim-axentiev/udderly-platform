@@ -44,7 +44,7 @@ export function CampaignFooter() {
       <div className="mx-auto max-w-5xl px-5 text-center text-sm md:px-8">
         <p className="font-display text-2xl font-black uppercase">Name That Thing!</p>
         <p className="mt-2 opacity-80">
-          An Udderly Ridiculous Farm Life campaign. Gift cards are processed by FareHarbor.
+          An Udderly Ridiculous Farm Life campaign. Gift cards are processed through our checkout.
         </p>
         <p className="mt-1 opacity-60">© 2026 Udderly Ridiculous Farm Life</p>
       </div>

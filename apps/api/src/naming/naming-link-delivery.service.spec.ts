@@ -58,7 +58,7 @@ test("the naming message explains the link and the separate gift card", () => {
   assert.match(message.text, new RegExp(token));
   assert.match(message.text, /January 14, 2027 at 11:59 p\.m\. Eastern Time/);
   assert.match(message.text, /Share that link/);
-  assert.match(message.text, /FareHarbor delivers the gift card/);
+  assert.match(message.text, /separate email from our checkout/);
 });
 
 test("a verified claim queues delivery with the reservation id only", async () => {
@@ -283,7 +283,7 @@ test("a verified purchase emails one naming link and stores only its hash", {
   assert.match(mail.messages[0]?.text ?? "", /naming rights/);
   assert.match(mail.messages[0]?.text ?? "", /Wheelbarrow/);
   assert.match(mail.messages[0]?.text ?? "", /Share that link/);
-  assert.match(mail.messages[0]?.text ?? "", /FareHarbor delivers the gift card/);
+  assert.match(mail.messages[0]?.text ?? "", /separate email from our checkout/);
 
   const duplicate = await service.deliver(seeded.reservationId);
   assert.deepEqual(duplicate, { outcome: "already_sent" });

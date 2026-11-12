@@ -36,7 +36,7 @@ export function namingLinkMessage(
       "",
       "Share that link with the person who will receive the gift card. They open it and submit the name.",
       "",
-      "FareHarbor delivers the gift card itself in a separate message. This email only delivers the naming link.",
+      "The gift card itself arrives in a separate email from our checkout. This email only delivers the naming link.",
     ].join("\n"),
   };
 }

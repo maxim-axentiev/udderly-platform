@@ -120,7 +120,7 @@ export function reservationStatusText(
     return {
       heading: "Awaiting payment",
       detail:
-        "The gift card is not paid until FareHarbor records the purchase. Returning from checkout does not confirm payment.",
+        "The gift card is not paid until our payment system records the purchase. Returning from checkout does not confirm payment.",
     };
   }
   if (status === "expired") {

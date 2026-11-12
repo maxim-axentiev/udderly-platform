@@ -38,7 +38,7 @@ const FAQS = [
   },
   {
     q: "How do I receive the gift card?",
-    a: "Your gift card is delivered by email through FareHarbor, our checkout provider.",
+    a: "Your gift card is delivered by email after you complete checkout.",
   },
   {
     q: "How do I receive the naming link?",

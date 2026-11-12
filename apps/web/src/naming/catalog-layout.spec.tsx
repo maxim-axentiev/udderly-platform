@@ -94,6 +94,7 @@ test("the simplified landing page keeps the purchase note and drops the old sect
   assert.equal(html.includes("Get Your Certificate"), false);
   assert.equal(html.includes("Email 1"), false);
   assert.equal(html.includes("Buy Your Gift Card"), false);
+  assert.equal(html.includes("FareHarbor"), false);
 });
 
 test("claimed and on-hold cards share one grey treatment", () => {
@@ -110,6 +111,7 @@ test("claimed and on-hold cards share one grey treatment", () => {
   );
   assert.equal(html.match(/grayscale/g)?.length, 2);
   assert.match(html, />On Hold</);
+  assert.match(html, /Someone is currently trying to claim this item/);
   assert.match(html, />Claimed</);
   assert.equal(html.includes("held-stripes"), false);
   assert.equal(html.includes("-rotate-12"), false);

@@ -83,18 +83,6 @@ function ReservationPage() {
     return () => window.clearInterval(timer);
   }, [id, reservation?.status]);
 
-  async function checkStatus() {
-    try {
-      const next = await fetchReservation(id);
-      setReservation(next);
-      setError("");
-    } catch (caught: unknown) {
-      setError(
-        namingErrorMessage(caught, "This reservation could not be found."),
-      );
-    }
-  }
-
   const status = reservation
     ? reservationStatusText(reservation.status, reservation.submittedName)
     : null;
@@ -166,7 +154,7 @@ function ReservationPage() {
                       target="_blank"
                       rel="noopener noreferrer"
                     >
-                      Continue to FareHarbor checkout
+                      Continue to checkout
                     </a>
                   </Button>
                 </p>
@@ -177,13 +165,6 @@ function ReservationPage() {
                   this reservation.
                 </p>
               ) : null}
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => void checkStatus()}
-              >
-                Check payment status
-              </Button>
             </section>
           </div>
         ) : null}
