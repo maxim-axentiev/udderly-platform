@@ -117,32 +117,59 @@ test("claimed and on-hold cards share one grey treatment", () => {
   assert.equal(html.includes("-rotate-12"), false);
 });
 
-test("the catalogue interleaves tiers in a stable order", () => {
+test("the default catalogue leads with accessible prices", () => {
   const objects = [
-    ...tier("100", 2, 10_000),
-    ...tier("250", 1, 25_000),
-    ...tier("500", 1, 50_000),
     ...tier("1000", 2, 100_000),
+    ...tier("500", 8, 50_000),
+    ...tier("250", 16, 25_000),
+    ...tier("100", 48, 10_000),
   ];
+  const ordered = interleaveByTier(objects);
+  const prices = ordered.map((object) => object.priceCents);
+  assert.equal(ordered.length, 74);
+  assert.equal(new Set(ordered.map((object) => object.id)).size, 74);
   assert.deepEqual(
-    interleaveByTier(objects).map((object) => object.priceCents),
-    [100_000, 50_000, 25_000, 10_000, 100_000, 10_000],
+    prices.slice(0, 16),
+    [
+      10_000, 25_000, 10_000, 10_000, 50_000,
+      10_000, 25_000, 10_000, 10_000, 100_000,
+      10_000, 25_000, 10_000, 10_000, 50_000,
+      25_000,
+    ],
   );
   assert.deepEqual(
-    interleaveByTier(objects).map((object) => object.id),
-    interleaveByTier(objects).map((object) => object.id),
+    prices.flatMap((price, index) => (price === 100_000 ? [index + 1] : [])),
+    [10, 30],
+  );
+  assert.equal(prices.filter((price) => price === 10_000).length, 48);
+  assert.equal(prices.filter((price) => price === 25_000).length, 16);
+  assert.equal(prices.filter((price) => price === 50_000).length, 8);
+  assert.equal(prices.filter((price) => price === 100_000).length, 2);
+  for (const price of [10_000, 25_000, 50_000, 100_000]) {
+    assert.deepEqual(
+      ordered.filter((object) => object.priceCents === price).map((object) => object.id),
+      objects
+        .filter((object) => object.priceCents === price)
+        .sort((left, right) => left.name.localeCompare(right.name, "en-CA") || left.id.localeCompare(right.id))
+        .map((object) => object.id),
+    );
+  }
+  const reversed = [...objects].reverse();
+  assert.deepEqual(
+    interleaveByTier(reversed).map((object) => object.id),
+    ordered.map((object) => object.id),
   );
 });
 test("tier filters count the full catalogue", () => {
   const objects: NamingObject[] = [
-    ...tier("100", 32, 10_000),
-    ...tier("250", 32, 25_000),
+    ...tier("100", 48, 10_000),
+    ...tier("250", 16, 25_000),
     ...tier("500", 8, 50_000),
     ...tier("1000", 2, 100_000),
   ];
   assert.equal(objects.length, 74);
-  assert.equal(filterByPrice(objects, 10_000).length, 32);
-  assert.equal(filterByPrice(objects, 25_000).length, 32);
+  assert.equal(filterByPrice(objects, 10_000).length, 48);
+  assert.equal(filterByPrice(objects, 25_000).length, 16);
   assert.equal(filterByPrice(objects, 50_000).length, 8);
   assert.equal(filterByPrice(objects, 100_000).length, 2);
 });
