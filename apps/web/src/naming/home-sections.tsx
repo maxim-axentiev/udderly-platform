@@ -224,35 +224,28 @@ function HowItWorks() {
     {
       icon: MousePointerClick,
       title: "Pick Your Thing",
-      body: "Browse the available farm objects below and select the one you'd like to claim. Each object belongs to a specific gift-card price tier. First come, first served.",
+      body: "Browse the farm objects below and choose which one you'd like to gift naming rights to.",
     },
     {
       icon: CreditCard,
-      title: "Buy Your Gift Card",
-      body: "Click “Buy & Claim” and complete your gift-card purchase through our FareHarbor checkout. Your amount must be at least the minimum for your selected object.",
-      tip: true,
-    },
-    { icon: Mail, title: "Check Your Email", emails: true },
-    {
-      icon: PenLine,
-      title: "Name Your Masterpiece",
-      body: `Open the private naming link, choose a family-friendly name of up to ${NAME_MAX_LENGTH} characters, and submit it by ${DATES.nameDeadline} at 11:59 p.m. Eastern Time.`,
+      title: "Buy & Claim",
+      body: "Click “Buy & Claim” on your chosen item to purchase a qualifying gift card and claim its naming rights.",
     },
     {
-      icon: ScrollText,
-      title: "Get Your Certificate",
-      body: "After submitting your name, download or print your personalized digital naming certificate.",
+      icon: Mail,
+      title: "Check Your Email",
+      body: "After purchasing, we'll send a separate email to the address you entered at checkout with a link to name your item and receive a personalized digital certificate.",
     },
     {
       icon: PartyPopper,
       title: "Enjoy Your Farm Fame",
-      body: `Your object's name will appear on our Wall of Names inside the farm store for one year, beginning ${DATES.fameStart}.`,
+      body: `Your chosen name will be displayed in our farm store for one year, starting ${DATES.fameStart}.`,
     },
   ];
   return (
     <section className="bg-farm-beige px-5 py-20 md:px-8 md:py-28">
       <SectionTitle title="How It Works" />
-      <ol className="mx-auto mt-12 grid max-w-6xl gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <ol className="mx-auto mt-12 grid max-w-6xl grid-cols-1 gap-x-6 gap-y-10 md:grid-cols-2">
         {steps.map((step, index) => (
           <li
             key={step.title}
@@ -269,39 +262,17 @@ function HowItWorks() {
             <h3 className="font-display text-2xl font-black uppercase text-headline">
               {step.title}
             </h3>
-            {"body" in step && step.body ? (
-              <p className="mt-2 text-body-copy">{step.body}</p>
-            ) : null}
-            {"tip" in step && step.tip ? (
+            <p className="mt-2 text-body-copy">{step.body}</p>
+            {index === 1 ? (
               <div className="mt-4 rounded-xl bg-farm-gold/50 p-4 text-sm text-headline">
                 <p className="flex items-center gap-2 font-display text-base font-extrabold uppercase">
                   <Users size={16} aria-hidden="true" /> Giving the gift yourself?
                 </p>
                 <p className="mt-1">
-                  Enter <strong>YOUR</strong> email address at checkout. You'll
-                  receive both the gift card and the separate naming email, so
-                  you can present the gift yourself whenever you're ready.
+                  Enter your own email address at checkout. You'll receive both
+                  the gift card and the naming link so you can give them
+                  together whenever you're ready.
                 </p>
-              </div>
-            ) : null}
-            {"emails" in step && step.emails ? (
-              <div className="mt-3 space-y-3 text-sm">
-                <div className="rounded-xl border-2 border-secondary-accent p-3">
-                  <p className="font-display text-base font-extrabold uppercase text-headline">
-                    Email 1 · From FareHarbor
-                  </p>
-                  <p className="text-body-copy">Your gift card.</p>
-                </div>
-                <div className="rounded-xl border-2 border-primary-accent p-3">
-                  <p className="font-display text-base font-extrabold uppercase text-headline">
-                    Email 2 · From Udderly Ridiculous
-                  </p>
-                  <p className="text-body-copy">
-                    A <strong>separate</strong> email, sent once your qualifying
-                    payment is confirmed, with your private link to name your
-                    object.
-                  </p>
-                </div>
               </div>
             ) : null}
           </li>

@@ -84,7 +84,16 @@ test("the simplified landing page keeps the purchase note and drops the old sect
   assert.equal(html.includes("Some are useful"), false);
   assert.equal(html.includes("After it, no new naming-rights purchases"), false);
   assert.equal(html.includes("You don't have to wait"), false);
-  assert.equal(html.includes("11:59 p.m. Eastern Time"), true);
+  assert.match(html, /Pick Your Thing/);
+  assert.match(html, /Buy &amp; Claim/);
+  assert.match(html, /Check Your Email/);
+  assert.match(html, /Enjoy Your Farm Fame/);
+  assert.match(html, /Giving the gift yourself/);
+  assert.match(html, /grid-cols-1 gap-x-6 gap-y-10 md:grid-cols-2/);
+  assert.equal(html.includes("Name Your Masterpiece"), false);
+  assert.equal(html.includes("Get Your Certificate"), false);
+  assert.equal(html.includes("Email 1"), false);
+  assert.equal(html.includes("Buy Your Gift Card"), false);
 });
 
 test("claimed and on-hold cards share one grey treatment", () => {
