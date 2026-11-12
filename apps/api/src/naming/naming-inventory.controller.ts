@@ -28,6 +28,7 @@ import { PURCHASE_CLOSED_MESSAGE } from "./naming-deadline";
 import type { NamingObjectRecord } from "./naming-object.service";
 import { NamingObjectService } from "./naming-object.service";
 import { NamingReservationService } from "./naming-reservation.service";
+import { presentStaffNaming, type StaffNamingView } from "./naming-staff-booking";
 import { staffTestCheckoutAllowed } from "./naming-test-checkout";
 import {
   CERTIFICATE_RESEND_CONFIRMATION,
@@ -98,6 +99,7 @@ type InventoryObject = {
   availability: string;
   published: boolean;
   isTest: boolean;
+  naming: StaffNamingView;
 };
 
 @Controller("inventory")
@@ -264,7 +266,12 @@ export class NamingInventoryController {
   async list(@Req() request: Request) {
     this.requireSession(request);
     const objects = await this.objects.list();
-    return { objects: objects.map(toInventoryObject) };
+    const claims = await this.staff.claimsFor(objects);
+    return {
+      objects: objects.map((object) =>
+        toInventoryObject(object, claims.get(object.id)),
+      ),
+    };
   }
 
   @Post("objects")
@@ -533,7 +540,14 @@ export class NamingPhotoController {
   }
 }
 
-function toInventoryObject(object: NamingObjectRecord): InventoryObject {
+function toInventoryObject(
+  object: NamingObjectRecord,
+  naming: StaffNamingView = presentStaffNaming({
+    objectStatus: object.status,
+    reservation: null,
+    booking: null,
+  }),
+): InventoryObject {
   return {
     id: object.id,
     name: object.name,
@@ -544,6 +558,7 @@ function toInventoryObject(object: NamingObjectRecord): InventoryObject {
     availability: object.status,
     published: object.publishedAt !== null,
     isTest: object.isTest,
+    naming,
   };
 }
 

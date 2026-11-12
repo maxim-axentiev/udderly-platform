@@ -417,6 +417,8 @@ describe("inventory routes", { concurrency: false }, () => {
     assert.equal(opened.status, 200);
     const openedBody = (await opened.json()) as { objectName: string };
     assert.equal(openedBody.objectName, "Campaign Test Object $100");
+    assert.equal(JSON.stringify(openedBody).includes("purchaserEmail"), false);
+    assert.equal(JSON.stringify(openedBody).includes("orderNumber"), false);
     const closed = await fetch(`${baseUrl}/naming/links/${NAMING_TOKEN}`, {
       method: "POST",
       headers: {
@@ -719,9 +721,9 @@ function forbiddenFields(value: unknown): boolean {
   return (
     text.includes("checkoutRef") ||
     text.includes("namingToken") ||
-    text.includes("submittedName") ||
-    text.includes("paidAmount") ||
-    text.includes("fareharbor")
+    text.includes("fareharbor") ||
+    text.includes("4242") ||
+    text.includes("confirmation_url")
   );
 }
 
@@ -792,6 +794,9 @@ function memoryDatabase(stored: StoredObject[]) {
 }
 
 const staffStub = {
+  async claimsFor(objects: Array<{ id: string; status: string }>) {
+    return new Map(objects.map((object) => [object.id, undefined]));
+  },
   async view() {
     return undefined;
   },

@@ -1,14 +1,25 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useState, type FormEvent } from "react";
-import { availabilityLabel, formatPrice } from "../naming/format";
+import { formatPrice, formatTimestamp } from "../naming/format";
 import { ObjectPhoto } from "../naming/object-photo";
 import {
   centsToDollars,
+  customerObjectCount,
   dollarsToCents,
+  filterStaffObjects,
   inventoryPhotoSrc,
   inventoryRequest,
+  outstandingNamingCount,
+  STAFF_STATUS_FILTERS,
+  STAFF_TIER_FILTERS,
+  staffAttentionLabel,
   staffCanPublish,
+  staffStateLabel,
   type InventoryObject,
+  type StaffNamingState,
+  type StaffNamingView,
+  type StaffStatusFilter,
+  type StaffTierFilter,
 } from "../naming/inventory";
 
 type NamingRecord = {
@@ -50,6 +61,9 @@ function InventoryPage() {
   const [checkedSession, setCheckedSession] = useState(false);
   const [naming, setNaming] = useState<NamingRecord | null>(null);
   const [correction, setCorrection] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StaffStatusFilter>("all");
+  const [tierFilter, setTierFilter] = useState<StaffTierFilter>("all");
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -150,6 +164,7 @@ function InventoryPage() {
         },
       );
       await loadNaming(objectId);
+      await loadObjects();
       setMessage("The corrected name is saved.");
     } catch (error) {
       setMessage(errorText(error, "The name could not be corrected."));
@@ -366,6 +381,13 @@ function InventoryPage() {
   }
 
   const priceLocked = editing !== null && editing.availability !== "available";
+  const visible = filterStaffObjects(objects, {
+    status: statusFilter,
+    tier: tierFilter,
+    query: search,
+  });
+  const customerCount = customerObjectCount(objects);
+  const outstandingCount = outstandingNamingCount(objects);
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-10">
@@ -382,7 +404,37 @@ function InventoryPage() {
       </div>
       <p className="mt-3 max-w-2xl text-stone-600">
         New objects stay unpublished. Held and claimed objects keep their price.
+        {customerCount} customer objects are in inventory. Test objects stay
+        visible here and are excluded from that count. {outstandingCount} customer{" "}
+        {outstandingCount === 1 ? "object is" : "objects are"} claimed and not named.
       </p>
+      <div className="mt-6 space-y-4">
+        <label className="block text-sm font-medium" htmlFor="inventory-search">
+          Search
+          <input
+            id="inventory-search"
+            className="mt-1 w-full rounded border border-stone-300 px-3 py-3"
+            value={search}
+            placeholder="Object, submitted name, email, or order number"
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </label>
+        <FilterGroup
+          label="Status"
+          options={STAFF_STATUS_FILTERS}
+          value={statusFilter}
+          onChange={setStatusFilter}
+        />
+        <FilterGroup
+          label="Tier"
+          options={STAFF_TIER_FILTERS}
+          value={tierFilter}
+          onChange={setTierFilter}
+        />
+        <p className="text-sm text-stone-700">
+          Showing {visible.length} of {objects.length}
+        </p>
+      </div>
       {message ? <p className="mt-4 text-stone-800">{message}</p> : null}
 
       <form className="mt-8 grid gap-4 rounded border border-stone-200 bg-white p-5 sm:grid-cols-2" onSubmit={(event) => void save(event)}>
@@ -454,15 +506,22 @@ function InventoryPage() {
       </form>
 
       <ul className="mt-8 grid gap-4">
-        {objects.map((object) => {
+        {visible.map((object) => {
           const photo = inventoryPhotoSrc(object.photoUrl);
           return (
-            <li key={object.id} className="rounded border border-stone-200 bg-white p-4 sm:flex sm:gap-4">
+            <li key={object.id} className={`rounded border border-l-4 border-stone-200 bg-white p-4 sm:flex sm:gap-4 ${stateTone(object.naming.state)}`}>
               <div className="w-full sm:w-40">
                 <ObjectPhoto src={photo} name={object.name} />
               </div>
               <div className="mt-3 min-w-0 flex-1 sm:mt-0">
-                <h2 className="text-lg font-semibold">{object.name}</h2>
+                <h2 className="text-lg font-semibold">
+                  {object.name}
+                  {object.isTest ? (
+                    <span className="ml-2 rounded bg-stone-900 px-2 py-0.5 align-middle text-xs font-semibold uppercase tracking-wide text-white">
+                      Test
+                    </span>
+                  ) : null}
+                </h2>
                 {object.description ? (
                   <p className="mt-1 text-stone-600">{object.description}</p>
                 ) : null}
@@ -470,11 +529,25 @@ function InventoryPage() {
                   {formatPrice(object.priceCents, object.currency)}
                   <span className="ml-2 text-sm font-normal text-stone-600">gift card</span>
                 </p>
-                <p className="mt-1 text-sm text-stone-700">
-                  {availabilityLabel(object.availability)}
-                  <span className="ml-2">{object.published ? "Published" : "Unpublished"}</span>
-                  {object.isTest ? <span className="ml-2">Test object</span> : null}
+                <p className="mt-2">
+                  <span className="inline-flex min-h-8 items-center rounded border border-current px-2 text-sm font-semibold">
+                    {staffStateLabel(object.naming.state)}
+                  </span>
+                  <span className="ml-2 text-sm text-stone-700">
+                    {object.published ? "Published" : "Unpublished"}
+                  </span>
                 </p>
+                {staffAttentionLabel(object.naming) ? (
+                  <p className="mt-2 text-sm font-semibold text-red-800">
+                    {staffAttentionLabel(object.naming)}
+                  </p>
+                ) : null}
+                {object.naming.state === "claimed_named" || object.naming.state === "claimed_unnamed" ? (
+                  <p className="mt-2 text-xl font-semibold text-stone-950">
+                    {object.naming.submittedName ?? "Not named yet."}
+                  </p>
+                ) : null}
+                <PurchaserDetails naming={object.naming} />
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button className="rounded border border-stone-300 px-3 py-2 text-sm" type="button" onClick={() => edit(object)}>
                     Edit
@@ -572,4 +645,113 @@ function InventoryPage() {
 
 function errorText(error: unknown, fallback: string): string {
   return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function stateTone(state: StaffNamingState): string {
+  if (state === "on_hold") {
+    return "border-l-amber-700";
+  }
+  if (state === "claimed_unnamed") {
+    return "border-l-orange-700";
+  }
+  if (state === "claimed_named") {
+    return "border-l-sky-800";
+  }
+  return "border-l-emerald-700";
+}
+
+function FilterGroup<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { id: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <fieldset>
+      <legend className="text-sm font-medium">{label}</legend>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {options.map((option) => {
+          const selected = option.id === value;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              aria-pressed={selected}
+              className={`min-h-11 rounded border px-3 py-2 text-sm ${selected ? "border-stone-900 bg-stone-900 text-white" : "border-stone-300 bg-white"}`}
+              onClick={() => onChange(option.id)}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function PurchaserDetails({ naming }: { naming: StaffNamingView }) {
+  const claimed = naming.state === "claimed_named" || naming.state === "claimed_unnamed";
+  const hasDetails = Boolean(
+    naming.purchaserName ||
+      naming.purchaserEmail ||
+      naming.purchaserPhone ||
+      naming.orderNumber ||
+      naming.paidAmountCents !== null ||
+      naming.purchasedAt,
+  );
+  if (!claimed && !hasDetails) {
+    return null;
+  }
+  if (!hasDetails) {
+    return (
+      <p className="mt-3 text-sm text-stone-700">
+        No purchaser details are stored for this booking.
+      </p>
+    );
+  }
+  return (
+    <dl className="mt-3 grid gap-1 text-sm text-stone-800">
+      {naming.purchaserName ? (
+        <div>
+          <dt className="inline font-medium">Purchaser: </dt>
+          <dd className="inline">{naming.purchaserName}</dd>
+        </div>
+      ) : null}
+      {naming.purchaserEmail ? (
+        <div>
+          <dt className="inline font-medium">Email: </dt>
+          <dd className="inline break-all">{naming.purchaserEmail}</dd>
+        </div>
+      ) : null}
+      {naming.purchaserPhone ? (
+        <div>
+          <dt className="inline font-medium">Phone: </dt>
+          <dd className="inline">{naming.purchaserPhone}</dd>
+        </div>
+      ) : null}
+      {naming.orderNumber ? (
+        <div>
+          <dt className="inline font-medium">FareHarbor order: </dt>
+          <dd className="inline">{naming.orderNumber}</dd>
+        </div>
+      ) : null}
+      {naming.paidAmountCents !== null ? (
+        <div>
+          <dt className="inline font-medium">Payment: </dt>
+          <dd className="inline">{formatPrice(naming.paidAmountCents, naming.currency ?? "CAD")}</dd>
+        </div>
+      ) : null}
+      {naming.purchasedAt ? (
+        <div>
+          <dt className="inline font-medium">Purchase date: </dt>
+          <dd className="inline">{formatTimestamp(naming.purchasedAt)}</dd>
+        </div>
+      ) : null}
+    </dl>
+  );
 }
