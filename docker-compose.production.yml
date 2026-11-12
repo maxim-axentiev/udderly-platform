@@ -162,7 +162,7 @@ services:
       - traefik.http.routers.giftcard-naming.tls=true
       - traefik.http.routers.giftcard-naming.tls.certresolver=letsencrypt
       - traefik.http.routers.giftcard-naming.service=udderly-platform-production
-      - traefik.http.routers.giftcard-naming.middlewares=giftcard-auth,giftcard-naming-route,giftcard-robots
+      - traefik.http.routers.giftcard-naming.middlewares=giftcard-naming-route,giftcard-robots
       - traefik.http.middlewares.giftcard-naming-route.headers.customrequestheaders.X-Udderly-Naming-Route=giftcard
       - traefik.http.routers.giftcard-inventory.rule=Host(`giftcard.udderlyridiculousfarmlife.com`) && PathPrefix(`/inventory/`)
       - traefik.http.routers.giftcard-inventory.priority=100
@@ -214,7 +214,7 @@ services:
       - traefik.http.routers.giftcard-web.entrypoints=websecure
       - traefik.http.routers.giftcard-web.tls=true
       - traefik.http.routers.giftcard-web.tls.certresolver=letsencrypt
-      - traefik.http.routers.giftcard-web.middlewares=giftcard-auth,giftcard-robots
+      - traefik.http.routers.giftcard-web.middlewares=giftcard-robots
       - traefik.http.services.giftcard-web.loadbalancer.server.port=3000
 
 networks:
